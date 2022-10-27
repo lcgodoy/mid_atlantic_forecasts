@@ -125,28 +125,48 @@ len_flounder <- expand.grid(haulid=unique(dat_exploded_neus$haulid), length=seq(
   left_join(hauldat)
 
 # count up all abundances for SDMs, which don't use length data 
-sdm_flounder <- len_flounder %>% 
+abund_flounder <- len_flounder %>% 
   group_by_at(vars(c(-number_at_length, -length))) %>% 
-  summarise(abundance = sum(number_at_length))
+  summarise(abundance = sum(number_at_length)) %>%
+  left_join(dat_exploded_neus %>% select(haulid, depth) %>% distinct(), by="haulid") # get depth in case wanted for SDM
 
-flounder_train <- len_flounder %>% 
+# use dat_exploded_neus for biomass SDMs
+bio_flounder <- dat_exploded_neus %>% 
+  filter(spp == spp_of_interest) %>% 
+  select(-common, -stratum, -stratumarea) %>%
+  left_join(hauldat %>% select(haulid, btemp), by="haulid")
+
+# split all into training/testing and save 
+abund_len_flounder_train <- len_flounder %>% 
   filter(year >= min_yr,
          year < forecast_yr_1)
 
-sdm_train <- sdm_flounder %>% 
+abund_flounder_train <- abund_flounder %>% 
   filter(year >= min_yr,
          year < forecast_yr_1)
 
-flounder_test <- len_flounder %>% 
+bio_flounder_train <- bio_flounder %>% 
+  filter(year >= min_yr,
+         year < forecast_yr_1)
+
+abund_len_flounder_test <- len_flounder %>% 
   filter(year >= forecast_yr_1,
          year <= max_yr)
 
-sdm_test <- sdm_flounder %>% 
+abund_flounder_test <- abund_flounder %>% 
   filter(year >= forecast_yr_1,
          year <= max_yr)
 
-write_csv(flounder_train, here("processed-data","flounder_catch_at_length_fall_training.csv"))
-write_csv(flounder_test, here("processed-data","flounder_catch_at_length_fall_testing.csv"))
+bio_flounder_test <- bio_flounder %>% 
+  filter(year >= forecast_yr_1,
+         year <= max_yr)
 
-write_csv(sdm_train, here("processed-data","flounder_catch_for_sdm_fall_training.csv"))
-write_csv(sdm_test, here("processed-data","flounder_catch_for_sdm_fall_testing.csv"))
+write_csv(abund_len_flounder_train, here("processed-data","flounder_catch_at_length_fall_training.csv"))
+write_csv(abund_len_flounder_test, here("processed-data","flounder_catch_at_length_fall_testing.csv"))
+
+write_csv(abund_flounder_train, here("processed-data","flounder_catch_fall_training.csv"))
+write_csv(abund_flounder_test, here("processed-data","flounder_catch_fall_testing.csv"))
+
+
+write_csv(bio_flounder_train, here("processed-data","flounder_biomass_fall_training.csv"))
+write_csv(bio_flounder_test, here("processed-data","flounder_biomass_fall_testing.csv"))

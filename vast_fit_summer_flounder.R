@@ -33,81 +33,9 @@ devtools::source_url("https://raw.github.com/aallyn/TargetsSDM/main/R/SDM_PredVa
 
 
 # Initial data prep: trawl and sample data --------------------------------
-# This is mostly taken from "prep_summer_flounder_data.R, with the change that for the VAST model, we are going to want to have the total biomass (e.g., numbers density) for summer flounder at each of the tow locations. This will then get multiplied by the "area" of each of the patches (e.g., latitude bins) to get the total estimated abundance for that time/patch.
+flounder_train <- read_csv(here("processed-data","flounder_biomass_fall_training.csv")) %>% filter(!is.na(btemp))
+flounder_test <- read_csv(here("processed-data","flounder_biomass_fall_testing.csv"))%>% filter(!is.na(btemp))
 
-# To get the data, I went to the link here and then downloaded the zipped folder. I then grabbed the dat_exploded.rds file, the neus_Survdat.RData file and the neus_SVSPP.RData file. I added a raw-data folder and then gitignored it.
-dat_exploded<- readRDS(here("raw-data/dat_exploded.rds"))
-load(here("raw-data/neus_Survdat.RData")) # Biomass data
-load(here("raw-data/neus_SVSPP.RData")) # Taxanomy data
-
-spp_of_interest<- c("Paralichthys dentatus")
-reg_of_interest<- c("Northeast US Fall")
-
-dat_exploded_neus<- dat_exploded %>% 
-  filter(region == reg_of_interest) 
-
-max_yr<- 2016 # 2017 is missing, for some reason 
-min_yr<- 1972 # early years have some issues; the newly filtered OA data starts here anyway
-# to explore more the changes in samplng over time, make annual maps of haul locations, or a tile plot of year vs. lat band 
-forecast_yr_1 <- max_yr - 9
-
-# creating a separate haul info dataframe to get the date and btemp
-hauldat<- survdat %>% 
-  # create a haulid for joining
-  mutate(haulid = paste(formatC(CRUISE6, width=6, flag=0), formatC(STATION, width=3, flag=0), formatC(STRATUM, width=4, flag=0), sep='-')) %>% 
-  dplyr::select(haulid, BOTTEMP, YEAR, EST_TOWDATE, LAT, LON) %>% 
-  distinct() %>%
-  rename("btemp"=BOTTEMP,
-         "year"=YEAR,
-         "date"=EST_TOWDATE,
-         "lat"=LAT,
-         "lon"=LON)
-
-# tidy biomass data
-bio_flounder_prep<- survdat %>% 
-  # create a haulid for joining with dat.exploded
-  mutate(haulid = paste(formatC(CRUISE6, width=6, flag=0), formatC(STATION, width=3, flag=0), formatC(STRATUM, width=4, flag=0), sep='-')) %>% 
-  dplyr::select(haulid, SVSPP, LENGTH, NUMLEN, BIOMASS) %>% 
-  left_join(spp, by="SVSPP") %>% # get species names from species codes
-  mutate(spp = str_to_sentence(SCINAME)) %>% # change to format of sppOfInt
-  dplyr::select(spp, haulid, LENGTH, NUMLEN, BIOMASS) %>%
-  filter(!is.na(LENGTH),
-         spp == spp_of_interest,
-         LENGTH>4 # get rid of a single fish at 4cm -- the next smallest is 9cm
-  ) %>% 
-  rename("length"=LENGTH,
-         "number_at_length"=NUMLEN) %>%
-  group_by(., haulid, spp) %>% # Group by haulid, SVSPP
-  summarize_at(vars(BIOMASS), sum, na.rm = TRUE) %>%
-  rename("biomass" = BIOMASS) # Calculate the total biomass across all length/num length samples
-
-# Need to create biomass df that still includes zeroes?
-# important to use haulids from dat_exploded_neus because it has been cleaned
-bio_flounder<- expand.grid(haulid = unique(dat_exploded_neus$haulid)) %>% # get full factorial of every haul and biomass value
-  mutate(spp = spp_of_interest) %>% 
-  # left_joining to use only the hauls in dat_exploded_neus
-  left_join(bio_flounder_prep, by = c('haulid', 'spp')) %>% 
-  mutate(biomass = replace_na(biomass, 0)) %>%
-  left_join(hauldat)
-
-# Double check that...
-length(unique(dat_exploded_neus$haulid)) == length(unique(bio_flounder$haulid))
-
-# Looks good to go. Drop NA bottom temps
-bio_flounder<- bio_flounder %>%
-  drop_na(btemp)
-
-# Filter into training/testing and then write out these files
-flounder_train<- bio_flounder %>% 
-  filter(year >= min_yr,
-         year < forecast_yr_1)
-
-flounder_test<- bio_flounder %>% 
-  filter(year >= forecast_yr_1,
-         year <= max_yr)
-
-write_csv(flounder_train, here("processed-data","flounder_biomass_fall_training.csv"))
-write_csv(flounder_test, here("processed-data","flounder_biomass_fall_testing.csv"))
 
 if(run_vast=TRUE){
   # VAST data --------------------------------------
@@ -116,7 +44,7 @@ if(run_vast=TRUE){
   flounder_test$Pred_TF<- 1
   flounder_all<- bind_rows(flounder_train, flounder_test)
   #flounder_all<- bind_rows(flounder_train)
-  vast_samp_dat<- data.frame("Year" = flounder_all$year, "Lat" = flounder_all$lat, "Lon" = flounder_all$lon, "Biomass" = flounder_all$biomass, "Swept" = rep(1, nrow(flounder_all)), "Pred_TF" = flounder_all$Pred_TF)
+  vast_samp_dat<- data.frame("Year" = flounder_all$year, "Lat" = flounder_all$lat, "Lon" = flounder_all$lon, "Biomass" = flounder_all$wtcpue, "Swept" = rep(1, nrow(flounder_all)), "Pred_TF" = flounder_all$Pred_TF)
   
   # Next, a covariate dataframe and then rescaling bottom temperature
   vast_cov_dat<- data.frame("Year" = flounder_all$year, "btemp" = flounder_all$btemp, "Lat" = flounder_all$lat, "Lon" = flounder_all$lon) 
