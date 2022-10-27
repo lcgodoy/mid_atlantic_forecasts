@@ -30,7 +30,7 @@ run_vast <- FALSE
 # Functions -- sourced from aallyn/TargetsSDM. This includes a lot of helpful "VAST" functions.
 devtools::source_url("https://raw.github.com/aallyn/TargetsSDM/main/R/vast_functions.r")
 devtools::source_url("https://raw.github.com/aallyn/TargetsSDM/main/R/SDM_PredValidation_Functions.R")
-
+devtools::source_url("https://raw.github.com/James-Thorson-NOAA/VAST/dev/R/reload_model.R")
 
 # Initial data prep: trawl and sample data --------------------------------
 flounder_train <- read_csv(here("processed-data","flounder_biomass_fall_training.csv")) %>% filter(!is.na(btemp))
@@ -124,7 +124,7 @@ if(run_vast=TRUE){
 
 # Read in fitted model --------------------------------------
 vast_fit <- readRDS(here::here("results/vast/summer_flounder_vast.rds"))
-vast_fit <- reload_model(vast_fit)
+#vast_fit <- reload_model(vast_fit)
 nice_category_names <- "Summer flounder all"
 # Summarizing VAST model predictions --------------------------------------
 ## Covariate effects
