@@ -27,7 +27,7 @@ ctrl_file <- read_csv("control_file.csv") %>%
 # better to use %dopar% or apply/pmap this as a function? 
 
 fit_drms <- TRUE
-make_plots <- TRUE
+make_plots <- FALSE
 
 for(i in ctrl_file$id){
   

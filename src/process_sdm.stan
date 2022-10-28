@@ -741,13 +741,14 @@ generated quantities {
   matrix[np, ny_proj] theta_proj; // Bernoulli probability of encounter  
 
 
+
 // generate posterior predictive distributions for training data
 
   for (y in 1:ny_train){
     
     for (p in 1:np){
       // ignoring error around length sampling for now
-      n_at_age_pp[p,y] = bernoulli_rng(theta[p,y]) * exp(normal_rng(log(density_hat[p,y] + 1e-6), sigma_obs)); 
+      dens_pp[p,y] = bernoulli_rng(theta[p,y]) * exp(normal_rng(log(density_hat[p,y] + 1e-6), sigma_obs)); 
         
     }
     
