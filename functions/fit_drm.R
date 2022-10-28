@@ -51,8 +51,8 @@ fit_drm <- function(run_name = "test",
     ny_train=ny,
     ny_proj=ny_proj,
     n_lbins=n_lbins,
-    n_p_l_y = len,
-    abund_p_y = dens,
+    n_at_length = len,
+    n_at_age = dens,
     sbt = sbt,
     sbt_proj=sbt_proj,
     m=m,
@@ -103,23 +103,23 @@ fit_drm <- function(run_name = "test",
   
   readr::write_rds(stan_model_fit, file = file.path(results_path,
                                                     "stan_model_fit.rds"))
-  
-  abund_p_y <- dat_train_dens %>%
-    mutate(abundance = mean_dens * meanpatcharea) 
-  
-  abund_p_y_hat <- tidybayes::spread_draws(stan_model_fit, dens_p_y_hat[patch,year])
-  
-  
-  abundance_v_time <- abund_p_y_hat %>% 
-    ggplot(aes(year, dens_p_y_hat)) + 
-    stat_lineribbon() +
-    geom_point(data = abund_p_y, aes(year, abundance), color = "red") +
-    facet_wrap(~patch, scales = "free_y") +
-    labs(x="Year",y="Abundance") + 
-    scale_fill_brewer()
-  # abundance_v_time
-  ggsave(abundance_v_time, filename=file.path(results_path,"abundance_fits.pdf"), width=7, height=4)
-  
+  # 
+  # abund_p_y <- dat_train_dens %>%
+  #   mutate(abundance = mean_dens * meanpatcharea) 
+  # 
+  # abund_p_y_hat <- tidybayes::spread_draws(stan_model_fit, density_hat[patch,year])
+  # 
+  # 
+  # abundance_v_time <- abund_p_y_hat %>% 
+  #   ggplot(aes(year, density_hat)) + 
+  #   stat_lineribbon() +
+  #   geom_point(data = abund_p_y, aes(year, abundance), color = "red") +
+  #   facet_wrap(~patch, scales = "free_y") +
+  #   labs(x="Year",y="Abundance") + 
+  #   scale_fill_brewer()
+  # # abundance_v_time
+  # ggsave(abundance_v_time, filename=file.path(results_path,"abundance_fits.pdf"), width=7, height=4)
+  # 
   
   return(stan_model_fit)
   
