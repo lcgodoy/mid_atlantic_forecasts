@@ -20,3 +20,5 @@ To run models for summer flounder, follow these steps:
 1. Run `import_summer_flounder.R` to pull in and filter these data
 1. Run `get_summer_flounder_params.R` to mine parameters from summer flounder stock assessment tables 
 1. Run `prep_summer_flounder.R` to reshape the data for the DRM
+2. Explore `control_file.csv` and be sure you want to run the full factorial set of 64 models (if not, delete those rows)
+
