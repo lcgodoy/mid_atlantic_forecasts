@@ -35,7 +35,7 @@ ctrl_file <- read_csv("control_file.csv")
 
 # better to use %dopar% or apply/pmap this as a function? 
 
-fit_drms <- FALSE
+fit_drms <- TRUE
 make_plots <- TRUE
 
 i = ctrl_file$id[args[1]]  
@@ -105,11 +105,11 @@ if(make_plots==TRUE){
   abund_p_y_hat <- tidybayes::spread_draws(diagnostic_fit, density_hat[patch,year])
   
   abundance_v_time <- abund_p_y_hat %>% 
-    ggplot(aes(year, density_hat)) + # does this need to be converted to dens_obs?
+    ggplot(aes(year, density_hat)) + 
     stat_lineribbon() +
     geom_point(data = abund_p_y, aes(year, abundance), color = "red") +
     facet_wrap(~patch, scales = "free_y") +
-    labs(x="Year",y="Abundance") + 
+    labs(x="Year",y="Abundance", fill="Probability") + 
     scale_fill_brewer()
   
   abund_p_y_proj <-  dat_test_dens %>%
@@ -123,17 +123,18 @@ if(make_plots==TRUE){
     ggplot(aes(year, density_obs_proj)) + 
     stat_lineribbon() +
     geom_point(data = abund_p_y_proj, aes(year, abundance), color = "red") +
+    scale_x_continuous(breaks=seq(0, 10, 2)) +
     facet_wrap(~patch, scales = "free_y", ncol=5) +
-    labs(x="Year",y="Abundance") + 
+    labs(x="Year",y="Abundance", fill="Probability") + 
     scale_fill_brewer()
   
-  abundance_forecast <- abund_posterior_predictive %>% 
-    ggplot(aes(year, density_proj)) + 
-    stat_lineribbon() +
-    geom_point(data = abund_p_y_proj, aes(year, abundance), color = "red") +
-    facet_wrap(~patch, scales = "free_y", ncol=5) +
-    labs(x="Year",y="Abundance") + 
-    scale_fill_brewer()
+  # abundance_forecast <- abund_posterior_predictive %>%
+  #   ggplot(aes(year, density_proj)) +
+  #   stat_lineribbon() +
+  #   geom_point(data = abund_p_y_proj, aes(year, abundance), color = "red") +
+  #   facet_wrap(~patch, scales = "free_y", ncol=5) +
+  #   labs(x="Year",y="Abundance") +
+  #   scale_fill_brewer()
   
   n_p_l_y <- as.data.table(len) %>% 
     rename(year = V3, patch = V1, length = V2) %>% 
@@ -142,13 +143,22 @@ if(make_plots==TRUE){
     ungroup() %>% 
     filter(year == min(year) | year == max(year))
   
+  observed_abundance_tile <- abund_p_y %>% 
+    mutate(Year = (year + min(years) - 1), Latitude = (patch + min(patches) - 1), Abundance=abundance) %>% 
+    ggplot(aes(x=Year, y=Latitude, fill=Abundance)) +
+    geom_tile() +
+    theme_bw() +
+    scale_x_continuous(breaks=seq(min(years), max(years), 4)) +
+    scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
+    scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
+    labs(title="Observed")
   
   proj_observed_abundance_tile <- abund_p_y_proj %>% 
     mutate(Year = (year + min(years_proj) - 1), Latitude = (patch + min(patches) - 1), Abundance=abundance) %>% 
     ggplot(aes(x=Year, y=Latitude, fill=Abundance)) +
     geom_tile() +
     theme_bw() +
-    scale_x_continuous(breaks=seq(min(years), max(years), 1)) +
+    scale_x_continuous(breaks=seq(min(years_proj), max(years_proj), 1)) +
     scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
     scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
     labs(title="Observed")
@@ -156,6 +166,18 @@ if(make_plots==TRUE){
   proj_est_patch_abund <- observed_abund_posterior_predictive %>% 
     group_by(year, patch) %>% 
     summarise(abundance = mean(density_obs_proj))
+  
+  estimated_abundance_tile <- abund_p_y_hat%>% 
+    group_by(year, patch) %>% 
+    summarise(abundance = mean(density_hat)) %>% 
+    mutate(Year = (year + min(years) - 1), Latitude = (patch + min(patches) - 1), Abundance=abundance) %>% 
+    ggplot(aes(x=Year, y=Latitude, fill=Abundance)) +
+    geom_tile() +
+    theme_bw() +
+    scale_x_continuous(breaks=seq(min(years), max(years), 4)) +
+    scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
+    scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
+    labs(title="Estimated")
   
   proj_estimated_abundance_tile <- proj_est_patch_abund %>% 
     mutate(Year = (year + min(years_proj) - 1), Latitude = (patch + min(patches) - 1), Abundance=abundance) %>% 
@@ -166,10 +188,7 @@ if(make_plots==TRUE){
     scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
     scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
     labs(title="Estimated")
-  ggsave(proj_estimated_abundance_tile, filename=here(paste0("results/",i),"proj_estimated_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
-  ggsave(proj_observed_abundance_tile, filename=here(paste0("results/",i),"proj_observed_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
-  
-  
+
   # other parameters 
   sigma_obs_hat <-  rstan::extract(diagnostic_fit,"sigma_obs")[[1]]
   
@@ -217,8 +236,17 @@ if(make_plots==TRUE){
   #   geom_line(data=range_quantiles_proj, aes(x=year, y=lat, color=quantile)) + 
   #   geom_point(data=dat_centroid_proj, aes(x=year, y=centroid_lat), color="red")
   # 
-  ggsave(observed_abundance_forecast, filename=here(paste0("results/",i), "abundance_obs_v_time_by_patch_proj.png"), dpi=300, width=10, height=5)
-  ggsave(abundance_forecast, filename=here(paste0("results/",i), "abundance_true_v_time_by_patch_proj.png"), dpi=300, width=10, height=5)
+  ggsave(observed_abundance_tile, filename=here(paste0("results/",i),"observed_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
+  ggsave(estimated_abundance_tile, filename=here(paste0("results/",i),"estimated_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
+  
+  ggsave(proj_estimated_abundance_tile, filename=here(paste0("results/",i),"proj_estimated_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
+  ggsave(proj_observed_abundance_tile, filename=here(paste0("results/",i),"proj_observed_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
+  
+  
+  ggsave(observed_abundance_forecast, filename=here(paste0("results/",i), "abundance_est_v_time_by_patch_proj.png"), dpi=300, width=10, height=5)
+  ggsave(abundance_v_time, filename=here(paste0("results/",i), "abundance_est_v_time_by_patch.png"), dpi=300, width=10, height=5)
+  
+#  ggsave(abundance_forecast, filename=here(paste0("results/",i), "abundance_est_v_time_by_patch_proj.png"), dpi=300, width=10, height=5) 
   
   ggsave(gg_length, filename=here(paste0("results/",i),"length_dist_first_last_year.png"), dpi=300, width=5, height=10)
   
