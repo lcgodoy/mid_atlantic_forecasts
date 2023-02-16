@@ -96,6 +96,15 @@ if(make_plots==TRUE){
   
   rstan::check_hmc_diagnostics(diagnostic_fit)
   
+  num_divergent <- get_num_divergent(diagnostic_fit)
+  num_iters <- length(get_divergent_iterations(diagnostic_fit))
+  num_max_treedepth <- get_num_max_treedepth(diagnostic_fit)
+  bfmi <- get_bfmi(diagnostic_fit)
+  
+  diagnostic_ls <- list(num_divergent=num_divergent, num_iters=num_iters, num_max_treedepth=num_max_treedepth, bfmi=bfmi)
+  
+  capture.output(diagnostic_ls, file = here(paste0("results/",i),"diagnostics.txt"))
+  
   load(here("processed-data","stan_data_prep.Rdata"))
   
   # visualize abundance over time 
