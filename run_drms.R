@@ -7,19 +7,20 @@ if (length(args)==0) {
 }
 
 # designed to be sent as parallel jobs via a bash script on a HPC like Amarel at Rutgers
+# I have commented out or deleted some of the desireable features for a local machine, like analyzing an already-fitted model
 
 set.seed(42)
 library(tidyverse)
 library(tidybayes)
-#library(Cairo)
-library(here)
 library(magrittr)
+library(here) # currently only using this to pull in local data, not sure it's working. if it isn't we have bigger problems because fit_drm also uses here()
 library(rstan)
 library(Matrix)
 library(rstanarm)
 library(data.table)
 
-
+results.dir <- "/projects/f_mlp195/fredston/"
+  
 rstan_options(javascript = FALSE, auto_write = TRUE)
 
 # load fit_drm function 
@@ -33,22 +34,23 @@ quantiles_calc <- c(0.05, 0.5, 0.95)
 
 ctrl_file <- read_csv("control_file.csv") 
 
-# better to use %dopar% or apply/pmap this as a function? 
-
 fit_drms <- TRUE
 make_plots <- TRUE
 
 i = ctrl_file$id[args[1]]  
 
+results_path = paste0(results.dir,i,"/")
+
 # turn off if you just want to load already-fitted models and analyze them
 
-if (fit_drms){
+# if (fit_drms){
   # couldn't get this to work by creating a column with pmap(), got the uninformative warning "Problem with `mutate()` column" and it didn't work  
   drm_fits <-  ctrl_file %>%
     filter(id == i) 
   
   drm_fits$fits <- list(fit_drm(
     run_name = drm_fits$id,
+    results_path = results_path, 
     do_dirichlet = drm_fits$do_dirichlet,
     eval_l_comps = drm_fits$eval_l_comps,
     T_dep_movement = drm_fits$T_dep_movement,
@@ -68,26 +70,24 @@ if (fit_drms){
   )
   )
   
-  # Error: All columns in a tibble must be vectors.
-  # x Column `fits` is a `stanfit` object.
   
-} else {
+# } else {
   
-  drm_fits <- ctrl_file %>%
-    filter(id == i) %>% 
-    mutate(fits = pmap(list(run_name = id), ~ purrr::safely(readr::read_rds)(
-      here("results", .x, "stan_model_fit.rds")
-    )))
-  
-  #   drm_fits %<>% as.list()
-  
-  drm_worked <- map_lgl(map(drm_fits$fits,"error"), is.null)
-  
-  drm_fits <- drm_fits %>% 
-    filter(drm_worked) %>% 
-    mutate(fits = map(fits, "result"))
-  
-}
+#   drm_fits <- ctrl_file %>%
+#     filter(id == i) %>% 
+#     mutate(fits = pmap(list(run_name = id), ~ purrr::safely(readr::read_rds)(
+#       here("results", .x, "stan_model_fit.rds")
+#     )))
+#   
+#   #   drm_fits %<>% as.list()
+#   
+#   drm_worked <- map_lgl(map(drm_fits$fits,"error"), is.null)
+#   
+#   drm_fits <- drm_fits %>% 
+#     filter(drm_worked) %>% 
+#     mutate(fits = map(fits, "result"))
+#   
+# }
 
 if(make_plots==TRUE){
   # process results ---------------------------------------------------------
@@ -103,7 +103,7 @@ if(make_plots==TRUE){
   
   diagnostic_ls <- list(num_divergent=num_divergent, num_iters=num_iters, num_max_treedepth=num_max_treedepth, bfmi=bfmi)
   
-  capture.output(diagnostic_ls, file = here(paste0("results/",i),"diagnostics.txt"))
+  capture.output(diagnostic_ls, file = paste0(results_path,"diagnostics.txt"))
   
   load(here("processed-data","stan_data_prep.Rdata"))
   
@@ -245,25 +245,25 @@ if(make_plots==TRUE){
   #   geom_line(data=range_quantiles_proj, aes(x=year, y=lat, color=quantile)) + 
   #   geom_point(data=dat_centroid_proj, aes(x=year, y=centroid_lat), color="red")
   # 
-  ggsave(observed_abundance_tile, filename=here(paste0("results/",i),"observed_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
-  ggsave(estimated_abundance_tile, filename=here(paste0("results/",i),"estimated_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
+  ggsave(observed_abundance_tile, filename=paste0(results_path,"observed_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
+  ggsave(estimated_abundance_tile, filename=paste0(results_path,"estimated_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
   
-  ggsave(proj_estimated_abundance_tile, filename=here(paste0("results/",i),"proj_estimated_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
-  ggsave(proj_observed_abundance_tile, filename=here(paste0("results/",i),"proj_observed_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
+  ggsave(proj_estimated_abundance_tile, filename=paste0(results_path,"proj_estimated_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
+  ggsave(proj_observed_abundance_tile, filename=paste0(results_path,"proj_observed_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
   
   
-  ggsave(observed_abundance_forecast, filename=here(paste0("results/",i), "abundance_est_v_time_by_patch_proj.png"), dpi=300, width=10, height=5)
-  ggsave(abundance_v_time, filename=here(paste0("results/",i), "abundance_est_v_time_by_patch.png"), dpi=300, width=10, height=5)
+  ggsave(observed_abundance_forecast, filename=paste0(results_path, "abundance_est_v_time_by_patch_proj.png"), dpi=300, width=10, height=5)
+  ggsave(abundance_v_time, filename=paste0(results_path, "abundance_est_v_time_by_patch.png"), dpi=300, width=10, height=5)
   
 #  ggsave(abundance_forecast, filename=here(paste0("results/",i), "abundance_est_v_time_by_patch_proj.png"), dpi=300, width=10, height=5) 
   
-  ggsave(gg_length, filename=here(paste0("results/",i),"length_dist_first_last_year.png"), dpi=300, width=5, height=10)
+  ggsave(gg_length, filename=paste0(results_path,"length_dist_first_last_year.png"), dpi=300, width=5, height=10)
   
   # write out data for summary stats
   
-  write_csv(range_quantiles_proj, file=here(paste0("results/",i),"range_quantiles_proj.csv"))
-  write_csv(centroid_proj, file=here(paste0("results/",i),"centroid_proj.csv"))
-  write_csv(observed_abund_posterior_predictive, file=here(paste0("results/",i),"density_obs_proj.csv"))
+  write_csv(range_quantiles_proj, file=paste0(results_path,"range_quantiles_proj.csv"))
+  write_csv(centroid_proj, file=paste0(results_path,"centroid_proj.csv"))
+  write_csv(observed_abund_posterior_predictive, file=paste0(results_path,"density_obs_proj.csv"))
   
   
 } # close make plots 

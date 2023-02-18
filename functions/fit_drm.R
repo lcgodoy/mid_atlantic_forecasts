@@ -1,4 +1,5 @@
 fit_drm <- function(run_name = "test",
+                    results_path = file.path("results",run_name),
                     do_dirichlet = 1,
                     eval_l_comps = 0,
                     T_dep_mortality = 0,
@@ -21,9 +22,6 @@ fit_drm <- function(run_name = "test",
                     known_historic_f = 1,
                     sigma_obs_cv = 0.1,
                     h = 0.8) {
-  
-  
-  results_path <- file.path("results",run_name)
   
   
   if (!dir.exists(results_path)){
