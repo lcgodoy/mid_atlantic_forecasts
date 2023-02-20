@@ -8,6 +8,7 @@ if (length(args)==0) {
 
 print(args)
 class(args)
+args = as.numeric(args)
 
 # designed to be sent as parallel jobs via a bash script on a HPC like Amarel at Rutgers
 # I have commented out or deleted some of the desireable features for a local machine, like analyzing an already-fitted model
