@@ -52,6 +52,8 @@ results_path = ""
 drm_fits <-  ctrl_file %>%
   filter(id == i) 
 
+print(drm_fits)
+
 drm_fits$fits <- list(fit_drm(
   amarel = TRUE,
   run_name = drm_fits$id,
