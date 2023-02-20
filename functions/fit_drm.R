@@ -46,7 +46,7 @@ fit_drm <- function(amarel = FALSE,
   
   if (known_historic_f == 0){
     
-    f <- matrix(0.2, nrow = 21, ncol = 35)
+    f <- matrix(0.2, nrow = nrow(f), ncol = ncol(f))
     
   }
   
