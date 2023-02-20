@@ -25,10 +25,10 @@ fit_drm <- function(amarel = FALSE,
                     sigma_obs_cv = 0.1,
                     h = 0.8) {
   
-  if(amarel==TRUE){
-    dyn.load('/home/fredston/.conda/envs/drm/lib/libgfortran.so.4')
-    
-  }
+  # if(amarel==TRUE){
+  #   dyn.load('/home/fredston/.conda/envs/drm/lib/libgfortran.so.4')
+  #   
+  # }
   
   if(create_dir==TRUE){
     if (!dir.exists(results_path)){
@@ -37,11 +37,12 @@ fit_drm <- function(amarel = FALSE,
   }
   
   if(amarel==FALSE){
-  load(here::here("processed-data","stan_data_prep.Rdata"))
-  }
-  else {
+    load(here::here("processed-data","stan_data_prep.Rdata"))
+    }
+  
+  if(amarel==TRUE){
     load('/home/fredston/mid_atlantic_forecasts/processed-data/stan_data_prep.Rdata')
-  }
+    }
   
   if (known_historic_f == 0){
     
@@ -57,12 +58,13 @@ fit_drm <- function(amarel = FALSE,
   
   stan_data <- list(
     np=np,
+    patches=patches,
     n_ages=n_ages,
     ny_train=ny,
     ny_proj=ny_proj,
     n_lbins=n_lbins,
     n_at_length = len,
-    n_at_age = dens,
+    dens = dens,
     sbt = sbt,
     sbt_proj=sbt_proj,
     m=m,
@@ -98,7 +100,9 @@ fit_drm <- function(amarel = FALSE,
   
   if(amarel==FALSE){
     stan_file = here::here("src",paste0(drm_name,".stan"))
-  } else {
+  } 
+  
+  if(amarel==TRUE){
     stan_file = paste0('/home/fredston/mid_atlantic_forecasts/src/', drm_name, '.stan')
   }
   stan_model_fit <- stan(file = stan_file, 

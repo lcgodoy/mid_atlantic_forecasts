@@ -9,7 +9,7 @@ if (length(args)==0) {
 # designed to be sent as parallel jobs via a bash script on a HPC like Amarel at Rutgers
 # I have commented out or deleted some of the desireable features for a local machine, like analyzing an already-fitted model
 
-dyn.load('/home/fredston/.conda/envs/drm/lib/libgfortran.so.4')
+# dyn.load('/home/fredston/.conda/envs/drm/lib/libgfortran.so.4')
 
 set.seed(42)
 library(tidyverse)
@@ -52,7 +52,7 @@ drm_fits <-  ctrl_file %>%
   filter(id == i) 
 
 drm_fits$fits <- list(fit_drm(
-  amarel = TRUE,
+  amarel = FALSE,
   run_name = drm_fits$id,
   results_path = results_path, 
   create_dir = FALSE,
@@ -66,8 +66,8 @@ drm_fits$fits <- list(fit_drm(
   exp_yn = drm_fits$exp_yn,
   known_f = drm_fits$known_f,
   known_historic_f = drm_fits$known_historic_f,
-  warmup = 2000,
-  iter = 10000,
+  warmup = 10,
+  iter = 50,
   chains = 4,
   cores = 4,
   run_forecast = 1,
@@ -110,7 +110,7 @@ if(make_plots==TRUE){
   
   capture.output(diagnostic_ls, file = paste0(results_path,"diagnostics.txt"))
   
-  load("/home/fredston/mid_atlantic_forecasts/processed_data/stan_data_prep.Rdata")
+  load("/home/fredston/mid_atlantic_forecasts/processed-data/stan_data_prep.Rdata")
   
   # visualize abundance over time 
   abund_p_y <-  dat_train_dens %>%
@@ -250,19 +250,19 @@ if(make_plots==TRUE){
   #   geom_line(data=range_quantiles_proj, aes(x=year, y=lat, color=quantile)) + 
   #   geom_point(data=dat_centroid_proj, aes(x=year, y=centroid_lat), color="red")
   # 
-  ggsave(observed_abundance_tile, filename=paste0(results_path,"observed_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
-  ggsave(estimated_abundance_tile, filename=paste0(results_path,"estimated_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
+  ggsave(observed_abundance_tile, filename=paste0(results_path,"observed_abundance_v_time_tileplot.pdf"), scale=0.9, width=6, height=5)
+  ggsave(estimated_abundance_tile, filename=paste0(results_path,"estimated_abundance_v_time_tileplot.pdf"), scale=0.9, width=6, height=5)
   
-  ggsave(proj_estimated_abundance_tile, filename=paste0(results_path,"proj_estimated_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
-  ggsave(proj_observed_abundance_tile, filename=paste0(results_path,"proj_observed_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
+  ggsave(proj_estimated_abundance_tile, filename=paste0(results_path,"proj_estimated_abundance_v_time_tileplot.pdf"), scale=0.9, width=6, height=5)
+  ggsave(proj_observed_abundance_tile, filename=paste0(results_path,"proj_observed_abundance_v_time_tileplot.pdf"), scale=0.9, width=6, height=5)
   
   
-  ggsave(observed_abundance_forecast, filename=paste0(results_path, "abundance_est_v_time_by_patch_proj.png"), dpi=300, width=10, height=5)
-  ggsave(abundance_v_time, filename=paste0(results_path, "abundance_est_v_time_by_patch.png"), dpi=300, width=10, height=5)
+  ggsave(observed_abundance_forecast, filename=paste0(results_path, "abundance_est_v_time_by_patch_proj.pdf"), dpi=300, width=10, height=5)
+  ggsave(abundance_v_time, filename=paste0(results_path, "abundance_est_v_time_by_patch.pdf"), dpi=300, width=10, height=5)
   
-  #  ggsave(abundance_forecast, filename=here(paste0("results/",i), "abundance_est_v_time_by_patch_proj.png"), dpi=300, width=10, height=5) 
+  #  ggsave(abundance_forecast, filename=here(paste0("results/",i), "abundance_est_v_time_by_patch_proj.pdf"), dpi=300, width=10, height=5) 
   
-  ggsave(gg_length, filename=paste0(results_path,"length_dist_first_last_year.png"), dpi=300, width=5, height=10)
+  ggsave(gg_length, filename=paste0(results_path,"length_dist_first_last_year.pdf"), dpi=300, width=5, height=10)
   
   # write out data for summary stats
   
