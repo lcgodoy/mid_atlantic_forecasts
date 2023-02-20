@@ -25,10 +25,10 @@ fit_drm <- function(amarel = FALSE,
                     sigma_obs_cv = 0.1,
                     h = 0.8) {
   
-  # if(amarel==TRUE){
-  #   dyn.load('/home/fredston/.conda/envs/drm/lib/libgfortran.so.4')
-  #   
-  # }
+  if(amarel==TRUE){
+    dyn.load('/projects/community/gcc/9.2.0/gc563/lib64/libgfortran.so.5')
+    
+  }
   
   if(create_dir==TRUE){
     if (!dir.exists(results_path)){
