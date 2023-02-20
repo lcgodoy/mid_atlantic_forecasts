@@ -6,6 +6,8 @@ if (length(args)==0) {
   stop("Only one argument must be supplied", call.=FALSE)
 }
 
+print(args)
+
 # designed to be sent as parallel jobs via a bash script on a HPC like Amarel at Rutgers
 # I have commented out or deleted some of the desireable features for a local machine, like analyzing an already-fitted model
 
@@ -41,6 +43,8 @@ fit_drms <- TRUE
 make_plots <- TRUE
 
 i = ctrl_file$id[args[1]]  
+
+print(i)
 
 # results_path = paste0(results.dir,i,"/")
 results_path = ""
