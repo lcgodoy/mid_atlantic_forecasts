@@ -7,6 +7,7 @@ if (length(args)==0) {
 }
 
 print(args)
+class(args)
 
 # designed to be sent as parallel jobs via a bash script on a HPC like Amarel at Rutgers
 # I have commented out or deleted some of the desireable features for a local machine, like analyzing an already-fitted model
@@ -38,6 +39,8 @@ sapply(funs, function(x)
 quantiles_calc <- c(0.05, 0.5, 0.95)
 
 ctrl_file <- read_csv(paste0(home_drm_path, "control_file.csv") )
+
+print(head(ctrl_file))
 
 fit_drms <- TRUE
 make_plots <- TRUE
