@@ -9,6 +9,8 @@ if (length(args)==0) {
 # designed to be sent as parallel jobs via a bash script on a HPC like Amarel at Rutgers
 # I have commented out or deleted some of the desireable features for a local machine, like analyzing an already-fitted model
 
+dyn.load('/home/fredston/.conda/envs/drm/lib/libgfortran.so.4')
+
 set.seed(42)
 library(tidyverse)
 library(tidybayes)
@@ -50,6 +52,7 @@ results_path = ""
     filter(id == i) 
   
   drm_fits$fits <- list(fit_drm(
+    amarel = TRUE,
     run_name = drm_fits$id,
     results_path = results_path, 
     create_dir = FALSE,

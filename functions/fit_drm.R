@@ -1,4 +1,5 @@
-fit_drm <- function(run_name = "test",
+fit_drm <- function(amarel = FALSE,
+  run_name = "test",
                     results_path = file.path("results",run_name),
                     create_dir = TRUE, 
                     do_dirichlet = 1,
@@ -23,6 +24,11 @@ fit_drm <- function(run_name = "test",
                     known_historic_f = 1,
                     sigma_obs_cv = 0.1,
                     h = 0.8) {
+  
+  if(amarel==TRUE){
+    dyn.load('/home/fredston/.conda/envs/drm/lib/libgfortran.so.4')
+    
+  }
   
   if(create_dir==TRUE){
     if (!dir.exists(results_path)){
