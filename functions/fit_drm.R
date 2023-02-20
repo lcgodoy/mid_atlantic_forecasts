@@ -36,7 +36,12 @@ fit_drm <- function(amarel = FALSE,
     }
   }
   
-  load(here("processed-data","stan_data_prep.Rdata"))
+  if(amarel==FALSE){
+  load(here::here("processed-data","stan_data_prep.Rdata"))
+  }
+  else {
+    load('/home/fredston/mid_atlantic_forecasts/processed-data/stan_data_prep.Rdata')
+  }
   
   if (known_historic_f == 0){
     
@@ -91,7 +96,12 @@ fit_drm <- function(amarel = FALSE,
   )
   nums <- 100 * exp(-.2 * (0:(n_ages - 1)))
   
-  stan_model_fit <- stan(file = here::here("src",paste0(drm_name,".stan")), # check that it's the right model!
+  if(amarel==FALSE){
+    stan_file = here::here("src",paste0(drm_name,".stan"))
+  } else {
+    stan_file = paste0('/home/fredston/mid_atlantic_forecasts/src/', drm_name, '.stan')
+  }
+  stan_model_fit <- stan(file = stan_file, 
                          data = stan_data,
                          chains = chains,
                          warmup = warmup,

@@ -15,26 +15,26 @@ set.seed(42)
 library(tidyverse)
 library(tidybayes)
 library(magrittr)
-# library(here) # currently only using this to pull in local data, not sure it's working. if it isn't we have bigger problems because fit_drm also uses here()
 library(rstan)
 library(Matrix)
 library(rstanarm)
 library(data.table)
 
 # results.dir <- "/projects/f_mlp195/fredston/"
-  
+home_drm_path <- "/home/fredston/mid_atlantic_forecasts/"
+
 rstan_options(javascript = FALSE, auto_write = TRUE)
 
 # load fit_drm function 
 # fit_drm() fits the model and writes out the model object and a plot to the results directory
-funs <- list.files("functions")
+funs <- list.files(paste0(home_drm_path, "functions"))
 sapply(funs, function(x)
-  source(file.path("functions", x)))
+  source(file.path(paste0(home_drm_path, "functions"), x)))
 
 # which range edges should be calculated?
 quantiles_calc <- c(0.05, 0.5, 0.95)
 
-ctrl_file <- read_csv("control_file.csv") 
+ctrl_file <- read_csv(paste0(home_drm_path, "control_file.csv") )
 
 fit_drms <- TRUE
 make_plots <- TRUE
@@ -47,37 +47,37 @@ results_path = ""
 # turn off if you just want to load already-fitted models and analyze them
 
 # if (fit_drms){
-  # couldn't get this to work by creating a column with pmap(), got the uninformative warning "Problem with `mutate()` column" and it didn't work  
-  drm_fits <-  ctrl_file %>%
-    filter(id == i) 
-  
-  drm_fits$fits <- list(fit_drm(
-    amarel = TRUE,
-    run_name = drm_fits$id,
-    results_path = results_path, 
-    create_dir = FALSE,
-    do_dirichlet = drm_fits$do_dirichlet,
-    eval_l_comps = drm_fits$eval_l_comps,
-    T_dep_movement = drm_fits$T_dep_movement,
-    T_dep_mortality = drm_fits$T_dep_mortality,
-    T_dep_recruitment = drm_fits$T_dep_recruitment,
-    spawner_recruit_relationship = drm_fits$spawner_recruit_relationship,
-    process_error_toggle = drm_fits$process_error_toggle,
-    exp_yn = drm_fits$exp_yn,
-    known_f = drm_fits$known_f,
-    known_historic_f = drm_fits$known_historic_f,
-    warmup = 2000,
-    iter = 10000,
-    chains = 4,
-    cores = 4,
-    run_forecast = 1,
-    quantiles_calc = quantiles_calc, 
-  )
-  )
-  
-  
+# couldn't get this to work by creating a column with pmap(), got the uninformative warning "Problem with `mutate()` column" and it didn't work  
+drm_fits <-  ctrl_file %>%
+  filter(id == i) 
+
+drm_fits$fits <- list(fit_drm(
+  amarel = TRUE,
+  run_name = drm_fits$id,
+  results_path = results_path, 
+  create_dir = FALSE,
+  do_dirichlet = drm_fits$do_dirichlet,
+  eval_l_comps = drm_fits$eval_l_comps,
+  T_dep_movement = drm_fits$T_dep_movement,
+  T_dep_mortality = drm_fits$T_dep_mortality,
+  T_dep_recruitment = drm_fits$T_dep_recruitment,
+  spawner_recruit_relationship = drm_fits$spawner_recruit_relationship,
+  process_error_toggle = drm_fits$process_error_toggle,
+  exp_yn = drm_fits$exp_yn,
+  known_f = drm_fits$known_f,
+  known_historic_f = drm_fits$known_historic_f,
+  warmup = 2000,
+  iter = 10000,
+  chains = 4,
+  cores = 4,
+  run_forecast = 1,
+  quantiles_calc = quantiles_calc, 
+)
+)
+
+
 # } else {
-  
+
 #   drm_fits <- ctrl_file %>%
 #     filter(id == i) %>% 
 #     mutate(fits = pmap(list(run_name = id), ~ purrr::safely(readr::read_rds)(
@@ -202,7 +202,7 @@ if(make_plots==TRUE){
     scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
     scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
     labs(title="Estimated")
-
+  
   # other parameters 
   sigma_obs_hat <-  rstan::extract(diagnostic_fit,"sigma_obs")[[1]]
   
@@ -260,7 +260,7 @@ if(make_plots==TRUE){
   ggsave(observed_abundance_forecast, filename=paste0(results_path, "abundance_est_v_time_by_patch_proj.png"), dpi=300, width=10, height=5)
   ggsave(abundance_v_time, filename=paste0(results_path, "abundance_est_v_time_by_patch.png"), dpi=300, width=10, height=5)
   
-#  ggsave(abundance_forecast, filename=here(paste0("results/",i), "abundance_est_v_time_by_patch_proj.png"), dpi=300, width=10, height=5) 
+  #  ggsave(abundance_forecast, filename=here(paste0("results/",i), "abundance_est_v_time_by_patch_proj.png"), dpi=300, width=10, height=5) 
   
   ggsave(gg_length, filename=paste0(results_path,"length_dist_first_last_year.png"), dpi=300, width=5, height=10)
   
