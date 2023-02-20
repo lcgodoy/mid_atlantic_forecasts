@@ -1,5 +1,6 @@
 fit_drm <- function(run_name = "test",
                     results_path = file.path("results",run_name),
+                    create_dir = TRUE, 
                     do_dirichlet = 1,
                     eval_l_comps = 0,
                     T_dep_mortality = 0,
@@ -23,11 +24,11 @@ fit_drm <- function(run_name = "test",
                     sigma_obs_cv = 0.1,
                     h = 0.8) {
   
-  
-  if (!dir.exists(results_path)){
-    dir.create(results_path, recursive = TRUE)
+  if(create_dir==TRUE){
+    if (!dir.exists(results_path)){
+      dir.create(results_path, recursive = TRUE)
+    }
   }
-  
   
   load(here("processed-data","stan_data_prep.Rdata"))
   
@@ -94,14 +95,18 @@ fit_drm <- function(run_name = "test",
                          control = list(max_treedepth = max_treedepth,
                                         adapt_delta = 0.85),
                          init = lapply(1:chains, function(x) list(Topt = jitter(12,4),
-                                                                   log_r0 = jitter(10,5),
-                                                                   beta_obs = jitter(1e-6,4),
-                                                                   beta_obs_int = jitter(-10,2)))
+                                                                  log_r0 = jitter(10,5),
+                                                                  beta_obs = jitter(1e-6,4),
+                                                                  beta_obs_int = jitter(-10,2)))
   )
   
-  readr::write_rds(stan_model_fit, file = file.path(results_path,
-                                                    "stan_model_fit.rds"))
-  # 
+  # readr::write_rds(stan_model_fit, file = file.path(results_path,
+  #                                                 "stan_model_fit.rds"))
+  # didn't work on HPC
+  
+  readr::write_rds(stan_model_fit, file = paste0(results_path,
+                                                 "stan_model_fit.rds"))
+  
   # abund_p_y <- dat_train_dens %>%
   #   mutate(abundance = mean_dens * meanpatcharea) 
   # 

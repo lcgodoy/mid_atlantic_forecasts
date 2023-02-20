@@ -19,7 +19,7 @@ library(Matrix)
 library(rstanarm)
 library(data.table)
 
-results.dir <- "/projects/f_mlp195/fredston/"
+# results.dir <- "/projects/f_mlp195/fredston/"
   
 rstan_options(javascript = FALSE, auto_write = TRUE)
 
@@ -39,7 +39,8 @@ make_plots <- TRUE
 
 i = ctrl_file$id[args[1]]  
 
-results_path = paste0(results.dir,i,"/")
+# results_path = paste0(results.dir,i,"/")
+results_path = ""
 
 # turn off if you just want to load already-fitted models and analyze them
 
@@ -51,6 +52,7 @@ results_path = paste0(results.dir,i,"/")
   drm_fits$fits <- list(fit_drm(
     run_name = drm_fits$id,
     results_path = results_path, 
+    create_dir = FALSE,
     do_dirichlet = drm_fits$do_dirichlet,
     eval_l_comps = drm_fits$eval_l_comps,
     T_dep_movement = drm_fits$T_dep_movement,
