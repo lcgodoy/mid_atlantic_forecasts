@@ -15,7 +15,7 @@ set.seed(42)
 library(tidyverse)
 library(tidybayes)
 library(magrittr)
-library(here) # currently only using this to pull in local data, not sure it's working. if it isn't we have bigger problems because fit_drm also uses here()
+# library(here) # currently only using this to pull in local data, not sure it's working. if it isn't we have bigger problems because fit_drm also uses here()
 library(rstan)
 library(Matrix)
 library(rstanarm)
@@ -110,7 +110,7 @@ if(make_plots==TRUE){
   
   capture.output(diagnostic_ls, file = paste0(results_path,"diagnostics.txt"))
   
-  load(here("processed-data","stan_data_prep.Rdata"))
+  load("/home/fredston/mid_atlantic_forecasts/processed_data/stan_data_prep.Rdata")
   
   # visualize abundance over time 
   abund_p_y <-  dat_train_dens %>%
