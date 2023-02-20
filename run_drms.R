@@ -15,6 +15,7 @@ set.seed(42)
 library(tidyverse)
 library(tidybayes)
 library(magrittr)
+#library(here)
 library(rstan)
 library(Matrix)
 library(rstanarm)
@@ -52,7 +53,7 @@ drm_fits <-  ctrl_file %>%
   filter(id == i) 
 
 drm_fits$fits <- list(fit_drm(
-  amarel = FALSE,
+  amarel = TRUE,
   run_name = drm_fits$id,
   results_path = results_path, 
   create_dir = FALSE,
