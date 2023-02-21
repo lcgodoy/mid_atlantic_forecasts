@@ -21,7 +21,8 @@ sapply(funs, function(x)
 # which range edges should be calculated?
 quantiles_calc <- c(0.05, 0.5, 0.95)
 
-ctrl_file <- read_csv("control_file.csv") 
+ctrl_file <- read_csv("control_file.csv") %>%
+  filter(id %in% c('v0.21','v0.22','v0.23','v0.39','v0.40','v0.41'))
 
 fit_drms <- TRUE
 make_plots <- TRUE
@@ -29,7 +30,7 @@ make_plots <- TRUE
 for(k in 1:nrow(ctrl_file)){
   i = ctrl_file$id[k]  
   
-  results_path <- file.path("results",drm_fits$id)
+  results_path <- file.path("results",i)
   
   # turn off if you just want to load already-fitted models and analyze them
   
@@ -53,8 +54,8 @@ for(k in 1:nrow(ctrl_file)){
       known_historic_f = drm_fits$known_historic_f,
       warmup = 1000,
       iter = 5000,
-      chains = 2,
-      cores = 2,
+      chains = 4,
+      cores = 4,
       run_forecast = 1,
       quantiles_calc = quantiles_calc, 
     )
