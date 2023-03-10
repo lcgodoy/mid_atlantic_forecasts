@@ -105,7 +105,7 @@ drm_fits$fits <- list(fit_drm(
 #   
 # }
 
-if(make_plots==TRUE){
+# if(make_plots==TRUE){
   # process results ---------------------------------------------------------
   
   diagnostic_fit <- drm_fits$fits[[which(drm_fits$id == i)]]
@@ -142,7 +142,7 @@ if(make_plots==TRUE){
   
   observed_abund_posterior_predictive <- tidybayes::spread_draws(diagnostic_fit, density_obs_proj[patch,year])
   
-  abund_posterior_predictive <- tidybayes::spread_draws(diagnostic_fit, density_proj[patch,year])
+#   abund_posterior_predictive <- tidybayes::spread_draws(diagnostic_fit, density_proj[patch,year])
   
   observed_abundance_forecast <- observed_abund_posterior_predictive %>% 
     ggplot(aes(year, density_obs_proj)) + 
@@ -239,18 +239,11 @@ if(make_plots==TRUE){
     facet_grid(patch ~ year, scales = "free_y") + 
     scale_x_continuous(limits = c(0, 50)) # generates warnings because of the close-to-zero probabilities at larger lengths
   
-  # # range edges and centroids 
-  centroid_proj <- rstan::extract(diagnostic_fit,"centroid_proj")[[1]] %>%
-    as.data.table() %>%
-    pivot_longer(cols=everything(), names_to="year", values_to="lat") %>%
-    mutate(year = as.numeric(str_replace(year, "V", "")))
+   # range edges and centroids 
+  centroid_proj <- tidybayes::spread_draws(diagnostic_fit, centroid_proj[year]) 
   
-  range_quantiles_proj <- rstan::extract(diagnostic_fit,"range_quantiles_proj")[[1]] %>%
-    as.data.table() %>%
-    rename(year=V1, patch=value, quantile_category = V2) %>%
-    mutate(quantile = as.factor(quantiles_calc[quantile_category]), .keep="unused") %>%
-    group_by(quantile, year) %>%
-    summarize(lat = mean(patch))
+  range_quantiles_proj <- tidybayes::spread_draws(diagnostic_fit, range_quantiles_proj[quantile, year]) %>%
+    mutate(quantile = as.factor(quantiles_calc[quantile]), .keep="unused") 
   
   # centroid position by year
   dat_centroid_proj <- abund_p_y_proj %>%
@@ -280,6 +273,6 @@ if(make_plots==TRUE){
   write_csv(range_quantiles_proj, file=paste0(results_path,"range_quantiles_proj.csv"))
   write_csv(centroid_proj, file=paste0(results_path,"centroid_proj.csv"))
   write_csv(observed_abund_posterior_predictive, file=paste0(results_path,"density_obs_proj.csv"))
+  write_csv(n_at_length_hat, file=paste0(results_path,"n_at_length_hat.csv"))
   
-  
-} # close make plots 
+# } # close make plots 

@@ -124,7 +124,7 @@ fit_drm <- function(amarel = FALSE,
   #                                                 "stan_model_fit.rds"))
   # didn't work on HPC
   
-  readr::write_rds(stan_model_fit, file = paste0(results_path,
+  readr::write_rds(stan_model_fit, file = file.path(results_path,
                                                  "stan_model_fit.rds"))
   
   # abund_p_y <- dat_train_dens %>%
