@@ -51,7 +51,7 @@ i = ctrl_file$id[args[1]]
 print(i)
 
 # results_path = paste0(results.dir,i,"/")
-results_path = ""
+results_path = "./"
 
 # turn off if you just want to load already-fitted models and analyze them
 

@@ -21,11 +21,12 @@ sapply(funs, function(x)
 # which range edges should be calculated?
 quantiles_calc <- c(0.05, 0.5, 0.95)
 
-ctrl_file <- read_csv("control_file.csv") %>%
-  filter(id %in% c('v0.21','v0.22','v0.23','v0.39','v0.40','v0.41'))
+ctrl_file <- read_csv("control_file.csv") 
 
 fit_drms <- TRUE
 make_plots <- TRUE
+iters <- 50
+warmups <- 10
 
 for(k in 1:nrow(ctrl_file)){
   i = ctrl_file$id[k]  
@@ -52,10 +53,10 @@ for(k in 1:nrow(ctrl_file)){
       exp_yn = drm_fits$exp_yn,
       known_f = drm_fits$known_f,
       known_historic_f = drm_fits$known_historic_f,
-      warmup = 1000,
-      iter = 5000,
-      chains = 4,
-      cores = 4,
+      warmup = warmups,
+      iter = iters,
+      chains = 1,
+      cores = 1,
       run_forecast = 1,
       quantiles_calc = quantiles_calc, 
     )
@@ -67,7 +68,7 @@ for(k in 1:nrow(ctrl_file)){
     drm_fits <- ctrl_file %>%
       filter(id == i) %>%
       mutate(fits = pmap(list(run_name = id), ~ purrr::safely(readr::read_rds)(
-        here("results", .x, "stan_model_fit.rds")
+        here("stan_model_fit.rds")
       )))
     
     #   drm_fits %<>% as.list()
@@ -117,7 +118,7 @@ for(k in 1:nrow(ctrl_file)){
     
     observed_abund_posterior_predictive <- tidybayes::spread_draws(diagnostic_fit, density_obs_proj[patch,year])
     
-    abund_posterior_predictive <- tidybayes::spread_draws(diagnostic_fit, density_proj[patch,year])
+ #    abund_posterior_predictive <- tidybayes::spread_draws(diagnostic_fit, density_proj[patch,year])
     
     observed_abundance_forecast <- observed_abund_posterior_predictive %>% 
       ggplot(aes(year, density_obs_proj)) + 
@@ -215,17 +216,21 @@ for(k in 1:nrow(ctrl_file)){
       scale_x_continuous(limits = c(0, 50)) # generates warnings because of the close-to-zero probabilities at larger lengths
     
     # # range edges and centroids 
-    centroid_proj <- rstan::extract(diagnostic_fit,"centroid_proj")[[1]] %>%
-      as.data.table() %>%
-      pivot_longer(cols=everything(), names_to="year", values_to="lat") %>%
-      mutate(year = as.numeric(str_replace(year, "V", "")))
+    centroid_proj <- tidybayes::spread_draws(diagnostic_fit, centroid_proj[year]) 
     
-    range_quantiles_proj <- rstan::extract(diagnostic_fit,"range_quantiles_proj")[[1]] %>%
-      as.data.table() %>%
-      rename(year=V1, patch=value, quantile_category = V2) %>%
-      mutate(quantile = as.factor(quantiles_calc[quantile_category]), .keep="unused") %>%
-      group_by(quantile, year) %>%
-      summarize(lat = mean(patch))
+    range_quantiles_proj <- tidybayes::spread_draws(diagnostic_fit, range_quantiles_proj[quantile, year]) %>%
+      mutate(quantile = as.factor(quantiles_calc[quantile]), .keep="unused") 
+    
+    boop <- dat_test_dens %>% 
+      group_by(year) %>%
+      mutate(sumdens = sum(mean_dens)) %>%
+      arrange(patch) %>%
+      mutate(csum_dens = cumsum(mean_dens) / sumdens, 
+             diff_p = csum_dens - 0.05) %>%
+      group_by(year) %>% 
+      filter(diff_p == min(abs(diff_p)))
+    
+    
     
     # centroid position by year
     dat_centroid_proj <- abund_p_y_proj %>%
