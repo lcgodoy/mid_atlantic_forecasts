@@ -771,7 +771,13 @@ generated quantities {
         for(y in 1:ny_proj+1){
           
           if(T_dep_mortality==1){
-            surv_proj[p,a,y] = exp(-((f_proj[a,y] + m) * T_adjust_proj[p,y]));
+            
+            // fill in with last year of training data 
+            if(y==1){
+            surv_proj[p,a,y] = exp(-((f_proj[a,y] + m) * T_adjust[p,ny_train]));
+            }
+            
+            surv_proj[p,a,y] = exp(-((f_proj[a,y] + m) * T_adjust_proj[p,y-1]));
           }
           
           if(T_dep_mortality==0){
