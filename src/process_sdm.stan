@@ -435,7 +435,7 @@ transformed parameters{
               print(diagonal(mov_inst_m[y]));
               
             }
-                      }
+          }
         } else {
           for(z in 1:np){
             for(x in 1:np){
@@ -609,8 +609,8 @@ transformed parameters{
             // calculate every range quantile q for every year y
             range_quantiles[q, y] = calculate_range_quantile(np, patches, density_hat[,y], quantiles_calc[q]);
           }
-            
-            centroid[y] = sum(to_vector(density_hat[,y]) .* patches) / sum(to_vector(density_hat[,y])); // calculate center of gravity
+          
+          centroid[y] = sum(to_vector(density_hat[,y]) .* patches) / sum(to_vector(density_hat[,y])); // calculate center of gravity
         }
         
         
@@ -739,21 +739,21 @@ generated quantities {
   vector[ny_proj] centroid_proj; 
   matrix[number_quantiles, ny_proj] range_quantiles_proj; 
   matrix[np, ny_proj] theta_proj; // Bernoulli probability of encounter  
-
-
-
-// generate posterior predictive distributions for training data
-
+  
+  
+  
+  // generate posterior predictive distributions for training data
+  
   for (y in 1:ny_train){
     
     for (p in 1:np){
       // ignoring error around length sampling for now
       dens_pp[p,y] = bernoulli_rng(theta[p,y]) * exp(normal_rng(log(density_hat[p,y] + 1e-6), sigma_obs)); 
-        
+      
     }
     
   }
-
+  
   if(run_forecast==1){
     for(p in 1:np){
       for(y in 1:ny_proj){
@@ -774,10 +774,12 @@ generated quantities {
             
             // fill in with last year of training data 
             if(y==1){
-            surv_proj[p,a,y] = exp(-((f_proj[a,y] + m) * T_adjust[p,ny_train]));
+              surv_proj[p,a,y] = exp(-((f_proj[a,y] + m) * T_adjust[p,ny_train]));
             }
             
-            surv_proj[p,a,y] = exp(-((f_proj[a,y] + m) * T_adjust_proj[p,y-1]));
+            if(y>1){
+              surv_proj[p,a,y] = exp(-((f_proj[a,y] + m) * T_adjust_proj[p,y-1]));
+            }
           }
           
           if(T_dep_mortality==0){
@@ -940,7 +942,7 @@ generated quantities {
   
   for(y in 1:ny_proj){
     
-
+    
     for(p in 1:np){
       
       n_at_length_proj[y,p,1:n_lbins] = ((l_at_a_key' * to_vector(n_at_age_proj[y,p,1:n_ages])) .* selectivity_at_bin)'; // convert numbers at age to numbers at length. The assignment looks confusing here because this is an array of length y containing a bunch of matrices of dim p and n_lbins
@@ -948,12 +950,12 @@ generated quantities {
       
       // NOTE, ignoring length sampling process at this point. In theory, need multinomial_rng or a custom dirichlet-multinomial rng here to generate simulated length comps
       
-       n_at_length_obs_proj[y,p,1:n_lbins] =  n_at_length_proj[y,p,1:n_lbins]; // this is where length sampling process would go
+      n_at_length_obs_proj[y,p,1:n_lbins] =  n_at_length_proj[y,p,1:n_lbins]; // this is where length sampling process would go
       
       density_proj[p,y] = sum((to_vector(n_at_length_proj[y,p,1:n_lbins]))); // true population
-
+      
       theta_proj[p,y] = ((1/(1+exp(-(beta_obs_int + beta_obs*log(density_proj[p,y] + 1e-6))))));
-
+      
       density_obs_proj[p,y] = bernoulli_rng(theta_proj[p,y]) * exp(normal_rng(log(density_proj[p,y] + 1e-6), sigma_obs));
       // the observed densitieis as opposed to the true densities
       
@@ -963,10 +965,10 @@ generated quantities {
       // calculate every range quantile q for every year y
       range_quantiles_proj[q, y] = calculate_range_quantile(np, patches, density_obs_proj[,y], quantiles_calc[q]);
     }
-      
-
-      centroid_proj[y] = sum(to_vector(density_obs_proj[,y]) .* patches) / sum(to_vector(density_obs_proj[,y])); // calculate center of gravity
-      
+    
+    
+    centroid_proj[y] = sum(to_vector(density_obs_proj[,y]) .* patches) / sum(to_vector(density_obs_proj[,y])); // calculate center of gravity
+    
   } // close run forecast 
   
 } // close generated quantities block
