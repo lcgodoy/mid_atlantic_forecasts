@@ -56,33 +56,55 @@ functions {
     return(sum(to_sum[1:x])); 
   }
   
-  // function to calculate range quantiles
+  // functions to calculate range quantiles
+  // https://discourse.mc-stan.org/t/how-to-find-the-location-of-a-value-in-a-vector/19768/2
+  
+  // first: a function that calculates how many matches there are in vector x to real y (need this for counting along the abundance vector to estimate quantiles)
+  int num_matches(vector x, real y) {
+    int n = 0;
+    for (i in 1:rows(x))
+    if (x[i] == y)
+    n += 1;
+    return n;
+  }
+  
+  // next: a function that returns the positions of those matches along vector x 
+  int[] which_equal(vector x, real y) {
+    int match_positions[num_matches(x, y)];
+    int pos = 1;
+    for (i in 1:num_elements(x)) { // example code used size(), got error "no matches for available argument signatures for size"; but beware of applying this function to >1D arrays 
+      if (x[i] == y) {
+        match_positions[pos] = i;
+        pos += 1;
+      }
+    }
+    return match_positions;
+  }
+  
+  // finally: function to calculate range quantiles
   
   real calculate_range_quantile(int np, vector patches, real[] dens_by_patch, real quantile_out){
     vector[np] csum_dens;
-    vector[np] quant_p; 
-    real diff_p[np]; 
+    vector[np] csum_to_edge; 
     real quant_position; 
-    real dens_p[np];
+    real cutoff; 
+    int cutoff_id; 
+    
+    cutoff = sum(dens_by_patch[1:np]) * quantile_out; // where along the vector of counts does the quantile cutoff fall? (then need to translate that into a patch position, below)  
     
     for(i in 1:np){
       csum_dens[i] = csum(dens_by_patch[1:np], i); // calculate cumulative sum of density along each patch 
-    }
-    
-    quant_p = csum_dens / sum(dens_by_patch[1:np]); // turn in to proportions, i.e., quantiles 
-    
-    for(i in 1:np){
-      diff_p[i] = fabs(quant_p[i] - quantile_out); // minimizes absolute distance between estimated and desired quantile 
-    }
-    
-    // DOESN'T DEAL WITH TIES! (but they seem unlikely with only 10 patches)
-    
-    // probably a more elegant way to do this... 
-    for(i in 1:np){
-      if(diff_p[i] == min(diff_p)) {
-        quant_position = patches[i];
+      if(csum_dens[i] <= cutoff){
+        csum_to_edge[i] = csum_dens[i]; // keep only the patches below the edge 
+      } else {
+        csum_to_edge[i] = 0; 
       }
     }
+    
+    cutoff_id = min(which_equal(csum_to_edge, 0)); // get lowest patch with a 0 (that's the patch where the edge falls)
+    
+    quant_position = ((cutoff - max(csum_to_edge)) / dens_by_patch[cutoff_id]) + cutoff_id - 1; // calculate what proportion of the edge-containing patch is "filled in" by the actual fish up to the weighted quantile (that's the decimal) and then add in the other patches 
+    
     return(quant_position); 
     
   } // close quantile function
