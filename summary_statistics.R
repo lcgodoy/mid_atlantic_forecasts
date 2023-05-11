@@ -3,38 +3,43 @@ library(tidybayes)
 library(here)
 library(mgcv)
 library(magrittr)
+wtd.quantile <- Hmisc::wtd.quantile
 
 # copied from prep_summer_flounder and edited down; revisit this if study domain or other design decisions change 
 dat <- read_csv(here("processed-data","flounder_catch_at_length_fall_training.csv"))
 dat_test <- read_csv(here("processed-data","flounder_catch_at_length_fall_testing.csv"))
+load(here("processed-data","stan_data_prep.Rdata"))
+ctrl_file <- read_csv("control_file.csv") %>%
+  filter(eval_l_comps==0, 
+         spawner_recruit_relationship==1, 
+         process_error_toggle==1, 
+         known_f==1
+  ) 
+ctrl_file$model_name <- c('Base DRM','T-Movement','T-Recruitment','T-Mortality')
 
-dat_test_summ <- dat_test %>% 
-  group_by(haulid, year, lat, btemp) %>% 
-  summarise(dens = sum(number_at_length)) %>% 
+# what actually happened to edge and centroid positions in the testing data?
+# need to keep aggregated at patch scale so we are comparing evenly across models 
+dat_test_patch <- dat_test_dens %>% 
   group_by(year) %>% 
-  summarise(quant_0.05 = Hmisc::wtd.quantile(lat, weights=dens, probs=0.05),
-            quant_0.5 = Hmisc::wtd.quantile(lat, weights=dens, probs=0.5),
-            quant_0.95 = Hmisc::wtd.quantile(lat, weights=dens, probs=0.95))
+  summarise(warm_edge = wtd.quantile(lat_floor, weights=mean_dens, probs=0.05),
+            centroid = weighted.mean(lat_floor, w=mean_dens),
+            cold_edge = wtd.quantile(lat_floor, weights=mean_dens, probs=0.95)) %>% 
+  mutate(year = year + min(years_proj) - 1) %>% 
+  pivot_longer(cols=2:4, names_to="feature", values_to="value") 
 
-use_patches <- dat %>% 
-  mutate(lat_floor = floor(lat)) %>% 
-  group_by(lat_floor)
+# prep data for fitting GAM 
 
-patches <- sort(unique(use_patches$lat_floor))
-np = length(patches) 
-
-gamdat <- dat %>% 
+# fit GAM to all hauls (not patch level)
+dat_train_gam <- dat %>% 
   group_by(haulid, year, lat, btemp) %>% 
-  summarise(dens = sum(number_at_length)) %>% 
-  ungroup() 
+  summarise(dens = sum(number_at_length))
 
-gamdat_test <- dat_test %>% 
+dat_test_gam <- dat_test %>% 
   group_by(haulid, year, lat, btemp) %>% 
-  summarise(dens = sum(number_at_length)) %>% 
-  ungroup() 
+  summarise(dens = sum(number_at_length))
 
 # check data coverage of testing data
-gamdat_test %>% 
+dat_test_gam %>% 
   mutate(lat_floor = floor(lat)) %>% 
   group_by(year, lat_floor) %>% 
   mutate(n_tot = n(), 
@@ -46,63 +51,150 @@ gamdat_test %>%
   distinct() %>% 
   ggplot() + 
   geom_tile(aes(x=year, y=lat_floor, fill=prop_btemp, color=prop_btemp)) 
-# because so much data is missing in 2008, drop it from predictions 
+# because so much environmental data is missing in 2008, drop it from predictions 
 
-gamdat_test %<>% 
+dat_test_gam %<>% 
   filter(!year==2008)
 
-gam1 <- gam(dens ~ s(lat) + s(btemp), data = gamdat, family = "nb") # revisit family choice. ziP, ziplss, poisson?
-plot(gam1)
-gam.check(gam1) # not enough basis functions? revisit 
+# fit GAMs 
+# see https://github.com/pinskylab/project_velocity/blob/master/6_model_fitting_loop.R#L182
 
-gamdat_pred <- gamdat_test %>% 
-  mutate(dens_pred = predict.gam(gam1, newdata = gamdat_test %>% select(-dens)))
-# issue here--it's predicting negative densities--which is weird for a zero-inflated Poisson 
+spdata <- dat_train_gam %>%
+  mutate(pres = ifelse(dens>0, 1, 0), 
+         logdens = log(dens)) %>% 
+  filter(!is.na(btemp))
+spdata_proj <- dat_test_gam %>%
+  mutate(pres = ifelse(dens>0, 1, 0), 
+         logdens = log(dens)) %>% 
+  filter(!is.na(btemp))
 
-gam_out <- gamdat_pred %>% 
-  filter(!is.na(dens_pred)) %>% 
-  rowwise() %>% 
-  mutate(dens_pred = max(dens_pred, 0),
-         lat_floor = floor(lat)) %>% 
-  group_by(year) %>% 
-  summarise(quant_0.05 = Hmisc::wtd.quantile(lat, weights=dens_pred, probs=0.05),
-            quant_0.5 = Hmisc::wtd.quantile(lat, weights=dens_pred, probs=0.5),
-            quant_0.95 = Hmisc::wtd.quantile(lat, weights=dens_pred, probs=0.95))
+mypresmodtt<-formula(pres ~ s(btemp))
+myabunmodtt<-formula(logdens ~ s(btemp))
+
+# not sure if these are correct relative to how the source code worked, need to check 
+gammaPA <- log(nrow(spdata)) / 2
+gammaAbun <- log(nrow(spdata[spdata$pres==1,])) / 2
+
+mygam1tt<-gam(mypresmodtt, family="binomial",data=spdata, select=TRUE, gamma=gammaPA) 
+mygam2tt<-gam(myabunmodtt, data=spdata[spdata$pres==1,], select=TRUE, gamma=gammaAbun) 
+
+preds1tt <- predict(mygam1tt, newdata = spdata_proj, type="response") 
+preds2tt <- exp(predict(mygam2tt, newdata = spdata_proj, type='response'))
+
+predstt <- preds1tt*preds2tt 
+predstt[predstt<0] = 0
+predstt[is.na(predstt)] = 0 # is this correct?
+
+spdata_proj$predstt <- predstt
+
+# calculate residuals by feature (centroid, edges) of forecast 
+gam_summary <- spdata_proj %>% 
+  mutate(lat_floor = floor(lat)) %>% 
+  group_by(lat_floor, year) %>% 
+  summarise(dens_pred = mean(exp(predstt))) %>% # aggregate to patch scale for comparison to DRM 
+  group_by(year) %>% # calculate summary stats 
+  summarise(warm_edge = wtd.quantile(lat_floor, weights=dens_pred, probs=0.05),
+            centroid = weighted.mean(lat_floor, w=dens_pred),
+            cold_edge = wtd.quantile(lat_floor, weights=dens_pred, probs=0.95)) %>% 
+  pivot_longer(cols=2:4, names_to="feature", values_to="value_tmp") %>% 
+  left_join(dat_test_patch)%>% # compare  to true data 
+  mutate(resid = value_tmp - value, 
+         resid_sq = resid^2, 
+         .keep = "unused", # drop all the columns used in calculations 
+         id = "GAM") 
   
-results.tmp <- file.path('~/github/mid_atlantic_forecasts/results/v0.50')
+
+######
+# get DRMs
+######
+
+drm_out <- NULL
+
+# pull in drm forecasts and calculate residuals by year and by feature (centroid, edges) 
+for(i in 1:nrow(ctrl_file)){
+  
+  tmpdat <- ctrl_file[i,]
+
+results.tmp <- file.path(paste0('~/github/mid_atlantic_forecasts/results/',tmpdat$id))
 
 observed_abund_posterior_predictive <- read_csv(file.path(results.tmp, "density_obs_proj.csv"))
-range_quantiles_proj <- read_csv(file.path(results.tmp, "range_quantiles_proj.csv"))
+range_quantiles_proj <- read_csv(file.path(results.tmp, "range_quantiles_proj.csv")) # need to figure out why this is going to infinity some of the time! 
 
 centroid_proj <- read_csv(file.path(results.tmp, "centroid_proj.csv")) %>% 
-  mutate(year = as.numeric(year))
-centroid <- dat_test_dens %>% 
-  group_by(year) %>% 
-  summarise(lat_obs=weighted.mean(lat_floor, w=mean_dens))
-
-load("~/github/mid_atlantic_forecasts/processed-data/stan_data_prep.Rdata")
+  mutate(year = as.numeric(year)) 
 
 # centroid 
-centroid_summary <- centroid_proj %>% 
-  left_join(centroid) %>% 
-  mutate(resid = lat - lat_obs,
-         resid_sq = resid^2)
+centroid_tmp <- centroid_proj %>% 
+  mutate(year = year + min(years_proj) - 1) %>% 
+  left_join(dat_test_patch %>% filter(feature=="centroid")) %>% 
+  mutate(resid = centroid_proj - value,
+         resid_sq = resid^2, 
+         id = tmpdat$id) %>% 
+  select(-centroid_proj, -value)
 
-## mean bias
-mean(centroid_summary$resid)
+warm_edge_tmp <- range_quantiles_proj %>% 
+  filter(range_quantiles_proj < Inf,
+         quantile == 0.05) %>%  
+  mutate(
+    year = year + min(years_proj) - 1, 
+    range_quantiles_proj = range_quantiles_proj + min(patches)) %>% # don't need to subtract 1. we want patch 0.09 to be lat 35.09
+  left_join(dat_test_patch %>% filter(feature=="warm_edge")) %>% 
+  mutate(resid = range_quantiles_proj - value,
+         resid_sq = resid^2, 
+         id = tmpdat$id)%>% 
+  select(-range_quantiles_proj, -value, -quantile)
 
-## mean RMSE
-sqrt(mean(centroid_summary$resid_sq))
-  
-## bias over time
-centroid_summary %>% 
-  group_by(year) %>% 
-  summarise(bias = mean(resid))
+cold_edge_tmp <- range_quantiles_proj %>% 
+  filter(range_quantiles_proj < Inf,
+         quantile == 0.95) %>%  
+  mutate(
+    year = year + min(years_proj) - 1, 
+    range_quantiles_proj = range_quantiles_proj + min(patches)) %>% # don't need to subtract 1. we want patch 0.09 to be lat 35.09
+  left_join(dat_test_patch %>% filter(feature=="cold_edge")) %>% 
+  mutate(resid = range_quantiles_proj - value,
+         resid_sq = resid^2, 
+         id = tmpdat$id)%>% 
+  select(-range_quantiles_proj, -value, -quantile)
 
-## RMSE over time 
-centroid_summary %>% 
-  group_by(year) %>% 
-  summarise(rmse = sqrt(mean(resid_sq)))
+drm_out <- bind_rows(drm_out, centroid_tmp, warm_edge_tmp, cold_edge_tmp)
+}
 
-# index of abundance 
+drm_summary <- drm_out %>% 
+  group_by(year, feature, id) %>% 
+  summarise(resid = mean(resid)) %>% 
+  mutate(resid_sq = resid^2)
 
+dat_forecasts <- bind_rows(gam_summary, drm_summary) %>% 
+  left_join(ctrl_file %>% select(id, model_name))  %>% 
+  mutate(model_name = replace_na(model_name, 'GAM'))
+
+# pool across years to calculate bias and RMSE
+dat_forecasts_summ <- dat_forecasts %>% 
+  group_by(feature, id, model_name) %>% 
+  summarise(RMSE = sqrt(mean(resid_sq)), 
+            Bias = mean(resid)) %>% 
+  pivot_longer(cols=c(RMSE, Bias), values_to="value", names_to="metric")
+
+#####
+# plots 
+#####
+
+gg_metrics <- dat_forecasts_summ  %>% 
+  ggplot(aes(x=feature, y=value, color=model_name, fill=model_name, shape = model_name)) + 
+  geom_point(size=3) +
+  scale_color_manual(values= wesanderson::wes_palette("Darjeeling1", n = 5)) +
+  theme_bw() + 
+  facet_wrap(~metric, scales="free_y") +
+  labs(x="Feature", y="Metric") + 
+  theme(legend.position = "bottom")
+gg_metrics
+
+gg_bias <- dat_forecasts %>% 
+  ggplot(aes(x=year, y=resid,color=model_name, fill=model_name, shape = model_name )) + 
+  geom_line() +
+  geom_point() +
+  theme_bw() + 
+  theme(legend.position = "bottom") +
+labs(x="Year", y="Residuals (° lat)") + 
+  facet_wrap(~feature)
+gg_bias
