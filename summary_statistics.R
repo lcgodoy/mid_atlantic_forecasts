@@ -21,11 +21,15 @@ ctrl_file$model_name <- c('Base DRM','T-Movement','T-Recruitment','T-Mortality')
 # need to keep aggregated at patch scale so we are comparing evenly across models 
 dat_test_patch <- dat_test_dens %>% 
   group_by(year) %>% 
-  summarise(warm_edge = wtd.quantile(lat_floor, weights=mean_dens, probs=0.05),
+  summarise(abund = sum(mean_dens) * meanpatcharea,
+            warm_edge = wtd.quantile(lat_floor, weights=mean_dens, probs=0.05),
             centroid = weighted.mean(lat_floor, w=mean_dens),
             cold_edge = wtd.quantile(lat_floor, weights=mean_dens, probs=0.95)) %>% 
-  mutate(year = year + min(years_proj) - 1) %>% 
-  pivot_longer(cols=2:4, names_to="feature", values_to="value") 
+  arrange(year) %>% 
+  mutate(year = year + min(years_proj) - 1, 
+         abund_lr = log(abund / lag(abund))) %>% 
+  select(-abund) %>% 
+  pivot_longer(cols=c(warm_edge, centroid, cold_edge, abund_lr), names_to="feature", values_to="value") 
 
 # prep data for fitting GAM 
 
@@ -93,16 +97,18 @@ gam_summary <- spdata_proj %>%
   group_by(lat_floor, year) %>% 
   summarise(dens_pred = mean(exp(predstt))) %>% # aggregate to patch scale for comparison to DRM 
   group_by(year) %>% # calculate summary stats 
-  summarise(warm_edge = wtd.quantile(lat_floor, weights=dens_pred, probs=0.05),
+  summarise(abund = sum(dens_pred) * meanpatcharea,
+            warm_edge = wtd.quantile(lat_floor, weights=dens_pred, probs=0.05),
             centroid = weighted.mean(lat_floor, w=dens_pred),
             cold_edge = wtd.quantile(lat_floor, weights=dens_pred, probs=0.95)) %>% 
-  pivot_longer(cols=2:4, names_to="feature", values_to="value_tmp") %>% 
+  arrange(year) %>% 
+  mutate(abund_lr = log(abund / lag(abund)), .keep="unused") %>% # note that this is technically the LR of change from 2007 to 2009 because the GAM doesn't use 2008
+  pivot_longer(cols=2:5, names_to="feature", values_to="value_tmp") %>% 
   left_join(dat_test_patch)%>% # compare  to true data 
   mutate(resid = value_tmp - value, 
          resid_sq = resid^2, 
          .keep = "unused", # drop all the columns used in calculations 
          id = "GAM") 
-  
 
 ######
 # get DRMs
@@ -114,49 +120,48 @@ drm_out <- NULL
 for(i in 1:nrow(ctrl_file)){
   
   tmpdat <- ctrl_file[i,]
-
-results.tmp <- file.path(paste0('~/github/mid_atlantic_forecasts/results/',tmpdat$id))
-
-observed_abund_posterior_predictive <- read_csv(file.path(results.tmp, "density_obs_proj.csv"))
-range_quantiles_proj <- read_csv(file.path(results.tmp, "range_quantiles_proj.csv")) # need to figure out why this is going to infinity some of the time! 
-
-centroid_proj <- read_csv(file.path(results.tmp, "centroid_proj.csv")) %>% 
-  mutate(year = as.numeric(year)) 
-
-# centroid 
-centroid_tmp <- centroid_proj %>% 
-  mutate(year = year + min(years_proj) - 1) %>% 
-  left_join(dat_test_patch %>% filter(feature=="centroid")) %>% 
-  mutate(resid = centroid_proj - value,
-         resid_sq = resid^2, 
-         id = tmpdat$id) %>% 
-  select(-centroid_proj, -value)
-
-warm_edge_tmp <- range_quantiles_proj %>% 
-  filter(range_quantiles_proj < Inf,
-         quantile == 0.05) %>%  
-  mutate(
-    year = year + min(years_proj) - 1, 
-    range_quantiles_proj = range_quantiles_proj + min(patches)) %>% # don't need to subtract 1. we want patch 0.09 to be lat 35.09
-  left_join(dat_test_patch %>% filter(feature=="warm_edge")) %>% 
-  mutate(resid = range_quantiles_proj - value,
-         resid_sq = resid^2, 
-         id = tmpdat$id)%>% 
-  select(-range_quantiles_proj, -value, -quantile)
-
-cold_edge_tmp <- range_quantiles_proj %>% 
-  filter(range_quantiles_proj < Inf,
-         quantile == 0.95) %>%  
-  mutate(
-    year = year + min(years_proj) - 1, 
-    range_quantiles_proj = range_quantiles_proj + min(patches)) %>% # don't need to subtract 1. we want patch 0.09 to be lat 35.09
-  left_join(dat_test_patch %>% filter(feature=="cold_edge")) %>% 
-  mutate(resid = range_quantiles_proj - value,
-         resid_sq = resid^2, 
-         id = tmpdat$id)%>% 
-  select(-range_quantiles_proj, -value, -quantile)
-
-drm_out <- bind_rows(drm_out, centroid_tmp, warm_edge_tmp, cold_edge_tmp)
+  
+  results.tmp <- file.path(paste0('~/github/mid_atlantic_forecasts/results/',tmpdat$id))
+  
+  observed_abund_posterior_predictive <- read_csv(file.path(results.tmp, "density_obs_proj.csv"))
+  range_quantiles_proj <- read_csv(file.path(results.tmp, "range_quantiles_proj.csv")) # need to figure out why this is going to infinity some of the time! 
+  
+  centroid_proj <- read_csv(file.path(results.tmp, "centroid_proj.csv")) %>% 
+    mutate(year = as.numeric(year)) 
+  
+  centroid_tmp <- centroid_proj %>% 
+    mutate(year = year + min(years_proj) - 1) %>% 
+    left_join(dat_test_patch %>% filter(feature=="centroid")) %>% 
+    mutate(resid = centroid_proj - value,
+           resid_sq = resid^2, 
+           id = tmpdat$id) %>% 
+    select(-centroid_proj, -value)
+  
+  warm_edge_tmp <- range_quantiles_proj %>% 
+    filter(range_quantiles_proj < Inf,
+           quantile == 0.05) %>%  
+    mutate(
+      year = year + min(years_proj) - 1, 
+      range_quantiles_proj = range_quantiles_proj + min(patches)) %>% # don't need to subtract 1. we want patch 0.09 to be lat 35.09
+    left_join(dat_test_patch %>% filter(feature=="warm_edge")) %>% 
+    mutate(resid = range_quantiles_proj - value,
+           resid_sq = resid^2, 
+           id = tmpdat$id)%>% 
+    select(-range_quantiles_proj, -value, -quantile)
+  
+  cold_edge_tmp <- range_quantiles_proj %>% 
+    filter(range_quantiles_proj < Inf,
+           quantile == 0.95) %>%  
+    mutate(
+      year = year + min(years_proj) - 1, 
+      range_quantiles_proj = range_quantiles_proj + min(patches)) %>% # don't need to subtract 1. we want patch 0.09 to be lat 35.09
+    left_join(dat_test_patch %>% filter(feature=="cold_edge")) %>% 
+    mutate(resid = range_quantiles_proj - value,
+           resid_sq = resid^2, 
+           id = tmpdat$id)%>% 
+    select(-range_quantiles_proj, -value, -quantile)
+  
+  drm_out <- bind_rows(drm_out, centroid_tmp, warm_edge_tmp, cold_edge_tmp)
 }
 
 drm_summary <- drm_out %>% 
@@ -195,6 +200,6 @@ gg_bias <- dat_forecasts %>%
   geom_point() +
   theme_bw() + 
   theme(legend.position = "bottom") +
-labs(x="Year", y="Residuals (° lat)") + 
+  labs(x="Year", y="Residuals (° lat)") + 
   facet_wrap(~feature)
 gg_bias
