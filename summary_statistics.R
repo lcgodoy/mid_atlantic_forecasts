@@ -21,15 +21,15 @@ ctrl_file$model_name <- c('Base DRM','T-Movement','T-Recruitment','T-Mortality')
 # need to keep aggregated at patch scale so we are comparing evenly across models 
 dat_test_patch <- dat_test_dens %>% 
   group_by(year) %>% 
-  summarise(abund = sum(mean_dens) * meanpatcharea,
+  summarise(
             warm_edge = wtd.quantile(lat_floor, weights=mean_dens, probs=0.05),
             centroid = weighted.mean(lat_floor, w=mean_dens),
-            cold_edge = wtd.quantile(lat_floor, weights=mean_dens, probs=0.95)) %>% 
+            cold_edge = wtd.quantile(lat_floor, weights=mean_dens, probs=0.95),
+            abund = sum(mean_dens) * meanpatcharea) %>% 
   arrange(year) %>% 
   mutate(year = year + min(years_proj) - 1, 
          abund_lr = log(abund / lag(abund))) %>% 
-  select(-abund) %>% 
-  pivot_longer(cols=c(warm_edge, centroid, cold_edge, abund_lr), names_to="feature", values_to="value") 
+  pivot_longer(cols=c(warm_edge:abund_lr), names_to="feature", values_to="value") 
 
 # prep data for fitting GAM 
 
@@ -97,13 +97,14 @@ gam_summary <- spdata_proj %>%
   group_by(lat_floor, year) %>% 
   summarise(dens_pred = mean(exp(predstt))) %>% # aggregate to patch scale for comparison to DRM 
   group_by(year) %>% # calculate summary stats 
-  summarise(abund = sum(dens_pred) * meanpatcharea,
+  summarise(
             warm_edge = wtd.quantile(lat_floor, weights=dens_pred, probs=0.05),
             centroid = weighted.mean(lat_floor, w=dens_pred),
-            cold_edge = wtd.quantile(lat_floor, weights=dens_pred, probs=0.95)) %>% 
+            cold_edge = wtd.quantile(lat_floor, weights=dens_pred, probs=0.95),
+            abund = sum(dens_pred) * meanpatcharea) %>% 
   arrange(year) %>% 
-  mutate(abund_lr = log(abund / lag(abund)), .keep="unused") %>% # note that this is technically the LR of change from 2007 to 2009 because the GAM doesn't use 2008
-  pivot_longer(cols=2:5, names_to="feature", values_to="value_tmp") %>% 
+  mutate(abund_lr = log(abund / lag(abund))) %>% # note that this is technically the LR of change from 2007 to 2009 because the GAM doesn't use 2008
+  pivot_longer(cols=warm_edge:abund_lr, names_to="feature", values_to="value_tmp") %>% 
   left_join(dat_test_patch)%>% # compare  to true data 
   mutate(resid = value_tmp - value, 
          resid_sq = resid^2, 
