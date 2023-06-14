@@ -603,7 +603,7 @@ transformed parameters{
       
   }
   
-  n_at_age_hat = pop_dy(np=np, ny_train=ny, n_ages=n_ages, n_lbins= n_lbins, bin_mids= bin_mids, sbt= sbt, m= m, loo= loo, maturity_at_age= maturity_at_age, wt_at_age= wt_at_age, f= f, adj_m= adj_m, h= h, age_at_maturity= age_at_maturity,   process_error_toggle= process_error_toggle, spawner_recruit_relationship= spawner_recruit_relationship, T_dep_mortality= T_dep_mortality, T_dep_movement= T_dep_movement, T_dep_recruitment= T_dep_recruitment, exp_yn= exp_yn,   rec_dev= rec_dev, log_r0= log_r0, sigma_r_raw= sigma_r_raw, p_length_50_sel= p_length_50_sel, sel_delta= sel_delta, log_mean_recruits= log_mean_recruits, Topt= Topt, width= width, d= d, beta_t= beta_t, init_dep= init_dep, beta_rec= beta_rec, raw= raw, alpha= alpha ); 
+  n_at_age_hat = pop_dy(np=np, ny_train=ny, n_ages=n_ages, n_lbins= n_lbins, bin_mids= bin_mids, sbt= sbt, m= m, loo= loo, maturity_at_age= maturity_at_age, wt_at_age= wt_at_age, f= f, adj_m= adj_m, h= h, age_at_maturity= age_at_maturity,   process_error_toggle= process_error_toggle, spawner_recruit_relationship= spawner_recruit_relationship, T_dep_mortality= T_dep_mortality, T_dep_movement= T_dep_movement, T_dep_recruitment= T_dep_recruitment, exp_yn= exp_yn,   rec_dev= rec_dev, log_r0= log_r0, sigma_r_raw= sigma_r_raw, p_length_50_sel= p_length_50_sel, sel_delta= sel_delta, log_mean_recruits= log_mean_recruits, Topt= Topt, width= width, d= d, beta_t= beta_t, init_dep= init_dep, beta_rec= beta_rec, raw= raw, alpha=alpha); 
   
   for(y in 1:ny_train){
     for(p in 1:np){
@@ -734,7 +734,7 @@ generated quantities {
   // anything indexed over ny_proj+1 starts the year before the first forecast (i.e., the last year of the model fit) 
   
   matrix[np, ny_train] dens_pp;
-  matrix[np, n_ages] n_at_age_obs_proj[ny_proj+1];
+//  matrix[np, n_ages] n_at_age_obs_proj[ny_proj+1]; // how should we add this back in? 
   matrix[np, n_lbins] n_at_length_obs_proj[ny_proj+1];
   matrix[np, n_ages] n_at_age_proj[ny_proj+1];
   matrix[np, n_lbins] n_at_length_proj[ny_proj+1];
@@ -772,16 +772,20 @@ generated quantities {
   }
   
   if(run_forecast==1){
-    for(p in 1:np){
-      for(y in 1:ny_proj){
-        T_adjust_proj[p,y] = T_dep(sbt_proj[p,y], Topt, width, exp_yn);
-      } // close years
-    } // close patches
     
     // initialize with final year(s) of our model
     n_at_age_proj[1,,] = n_at_age_hat[ny_train,,];
     
     raw_proj[1] = raw[ny_train];
+    
+    // run pop dy 
+      n_at_age_proj[2:ny_proj+1,,] = pop_dy(np=np, ny_proj=ny, n_ages=n_ages, n_lbins= n_lbins, bin_mids= bin_mids, sbt_proj= sbt, m= m, loo= loo, maturity_at_age= maturity_at_age, wt_at_age= wt_at_age, f= f, adj_m= adj_m, h= h, age_at_maturity= age_at_maturity,   process_error_toggle= process_error_toggle, spawner_recruit_relationship= spawner_recruit_relationship, T_dep_mortality= T_dep_mortality, T_dep_movement= T_dep_movement, T_dep_recruitment= T_dep_recruitment, exp_yn= exp_yn,   rec_dev= rec_dev, log_r0= log_r0, sigma_r_raw= sigma_r_raw, p_length_50_sel= p_length_50_sel, sel_delta= sel_delta, log_mean_recruits= log_mean_recruits, Topt= Topt, width= width, d= d, beta_t= beta_t, init_dep= init_dep, beta_rec= beta_rec, raw= raw, alpha= alpha ); 
+    
+    for(p in 1:np){
+      for(y in 1:ny_proj){
+        T_adjust_proj[p,y] = T_dep(sbt_proj[p,y], Topt, width, exp_yn);
+      } // close years
+    } // close patches
     
     for(p in 1:np){
       for(a in 1:n_ages){
