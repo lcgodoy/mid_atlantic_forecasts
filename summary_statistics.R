@@ -5,6 +5,8 @@ library(mgcv)
 library(magrittr)
 wtd.quantile <- Hmisc::wtd.quantile
 
+# need to add scripts that plot all posteriors to explore parameter estimation, maybe as a supplementary .Rmd file 
+
 # copied from prep_summer_flounder and edited down; revisit this if study domain or other design decisions change 
 dat <- read_csv(here("processed-data","flounder_catch_at_length_fall_training.csv"))
 dat_test <- read_csv(here("processed-data","flounder_catch_at_length_fall_testing.csv"))
