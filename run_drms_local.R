@@ -21,12 +21,17 @@ sapply(funs, function(x)
 # which range edges should be calculated?
 quantiles_calc <- c(0.05, 0.5, 0.95)
 
-ctrl_file <- read_csv("control_file.csv") 
+ctrl_file <- read_csv("control_file.csv") %>%
+  filter(eval_l_comps==0, 
+         spawner_recruit_relationship==1, 
+         process_error_toggle==1, 
+         known_f==1
+         )
 
 fit_drms <- TRUE
 make_plots <- TRUE
-iters <- 50
-warmups <- 10
+iters <- 3000
+warmups <- 400
 
 for(k in 1:nrow(ctrl_file)){
   i = ctrl_file$id[k]  
