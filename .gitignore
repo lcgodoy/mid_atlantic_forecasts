@@ -15,5 +15,3 @@ src/*.rds
 flounderfits.Rdata
 results/*.rds
 **/results/**/*.rds
-# Andrew added
-raw-data/
