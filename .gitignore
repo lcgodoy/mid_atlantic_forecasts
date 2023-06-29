@@ -15,3 +15,6 @@ src/*.rds
 flounderfits.Rdata
 results/*.rds
 **/results/**/*.rds
+**/results/**/*.csv
+**/results/**/*.txt
+pinskylab-*/*

@@ -9,16 +9,16 @@ here <- here::here
 # download from: https://zenodo.org/record/3885625
 # DOI 10.5281/zenodo.3885625
 
-OApath <- "~/github/OceanAdapt-update2020/"
+OApath <- "pinskylab-OceanAdapt-c913be5"
 
-load(paste0(OApath,"data_clean/dat_exploded.rds")) # get zero-inflated survey data
-# for some reason this line isn't working for me and I have to import it manually, not sure why
+dat_exploded <- readRDS(here(OApath,"data_clean","dat_exploded.rds")) # get zero-inflated survey data
+# for some reason this line isn't working for me and I have to import it manually, not sure why XX Because you can't load an rds, you can only loaf RData, you have to readRDS .rds files XX
 
-load(paste0(OApath,"data_raw/neus_Survdat.RData")) 
+load(here(OApath,"data_raw","neus_Survdat.RData")) 
 
 
 # note that in the NEFSC survey you may need to aggregate across sex classes ('CATCHSEX' column) for correct abundance/length values. for summer flounder that column is always 0 so it's not an issue
-load(paste0(OApath, "data_raw/neus_SVSPP.RData")) # get taxonomy
+load(here(OApath, "data_raw","neus_SVSPP.RData")) # get taxonomy
 
 
 spp_of_interest <- c("Paralichthys dentatus")
@@ -52,7 +52,7 @@ if(explore_data==TRUE){
   ggplot(stratum_all, aes(x=year, y=stratum, fill=sampled, color=sampled)) +
     geom_tile()  
   
-  load("~/github/OceanAdapt_9815545/data_clean/dat_exploded.Rdata")
+  dat_exploded <- readRDS(here(OApath,"data_clean","dat_exploded.rds")) # get zero-inflated survey data
   
   old_dat_exploded <- dat.exploded
   rm(dat.exploded)

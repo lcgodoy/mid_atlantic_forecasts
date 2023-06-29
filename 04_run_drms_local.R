@@ -22,16 +22,17 @@ sapply(funs, function(x)
 quantiles_calc <- c(0.05, 0.5, 0.95)
 
 ctrl_file <- read_csv("control_file.csv") %>%
-  filter(eval_l_comps==0, 
-         spawner_recruit_relationship==1, 
-         process_error_toggle==1, 
+  filter(eval_l_comps==0,
+         spawner_recruit_relationship==1,
+         process_error_toggle==1,
          known_f==1
-         )
+         ) |> 
+  slice(1)
 
 fit_drms <- TRUE
 make_plots <- TRUE
-iters <- 3000
-warmups <- 400
+iters <- 20
+warmups <- 10
 
 for(k in 1:nrow(ctrl_file)){
   i = ctrl_file$id[k]  
@@ -70,10 +71,29 @@ for(k in 1:nrow(ctrl_file)){
     
   } else {
     
+    # get_stanfit <- function(run_name){
+    #   
+    #   results_path <- here::here("results", run_name)
+    #   
+    #   stan_csvs <- list.files(results_path)
+    #   
+    #   stan_csvs <- file.path(results_path,stan_csvs[grepl("*.csv",stan_csvs)])
+    #   
+    #   out <-  rstan::read_stan_csv(stan_csvs)
+    #   
+    # }
+
+    # drm_fits <- ctrl_file %>%
+    #   filter(id == i) %>%
+    #   mutate(fits = map(id, get_stanfit, .progress = TRUE))
+    # 
+    #   drm_fits %<>% as.list()
+    
+
     drm_fits <- ctrl_file %>%
       filter(id == i) %>%
-      mutate(fits = pmap(list(run_name = id), ~ purrr::safely(readr::read_rds)(
-        here("stan_model_fit.rds")
+      mutate(fits = map(id, ~ purrr::safely(readr::read_rds)(
+        here("results",.x,"stan_model_fit.rds")
       )))
     
     #   drm_fits %<>% as.list()
@@ -203,7 +223,9 @@ for(k in 1:nrow(ctrl_file)){
     # length frequency 
     n_at_length_hat <- rstan::extract(diagnostic_fit,"n_at_length_hat")[[1]]
     
-    n_at_length_hat <- n_at_length_hat[sample(1:1000, 100, replace = FALSE),c(1,35),,]
+    
+    
+    n_at_length_hat <- n_at_length_hat[sample(1:dim(n_at_length_hat)[1], 100, replace = TRUE),c(1,35),,]
     
     n_at_length_hat <- data.table::as.data.table(n_at_length_hat) %>% 
       rename(year = V3, patch = V2, length = V1) %>% 
