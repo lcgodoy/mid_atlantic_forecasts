@@ -147,7 +147,6 @@ matrix[] simulate_population(int np, int ny_train, int n_ages, int n_lbins, int 
     
     //// calculate temperature based adjustments ////
     
-    // XX remember to fix this!!!!! XX
     for(p in 1:np){
       for(y in 1:cols(sbt)){
         T_adjust[p,y] =   T_dep(sbt[p,y], Topt, width, exp_yn);  

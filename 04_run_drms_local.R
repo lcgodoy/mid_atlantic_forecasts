@@ -26,9 +26,7 @@ ctrl_file <- read_csv("control_file.csv") %>%
          spawner_recruit_relationship==1,
          process_error_toggle==1,
          known_f==1
-         ) |> 
-  slice(1)
-
+         ) 
 fit_drms <- TRUE
 make_plots <- TRUE
 iters <- 20
