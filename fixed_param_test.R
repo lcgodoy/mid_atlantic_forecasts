@@ -11,6 +11,7 @@ library(rstanarm)
 library(geosphere)
 library(ggridges)
 library(purrr)
+library(cmdstanr)
 
 funs <- list.files("functions")
 sapply(funs, function(x) source(file.path("functions",x)))
@@ -333,15 +334,15 @@ stan_data <- list(
   patcharea = patcharea,
   l_at_a_key = l_at_a_mat,
   do_dirichlet = 1,
-  eval_l_comps = 0, # evaluate length composition data? 0=no, 1=yes
+  eval_l_comps = 1, # evaluate length composition data? 0=no, 1=yes
   T_dep_mortality = 0, # 0=off, 1=on
-  T_dep_recruitment = 1, # think carefully before making more than one of the temperature dependencies true
-  T_dep_movement = 0,
+  T_dep_recruitment = 0, # think carefully before making more than one of the temperature dependencies true
+  T_dep_movement = 1,
   patches = patches,
   wt_at_age = wt_at_age,
-  spawner_recruit_relationship = 1,
+  spawner_recruit_relationship = 0,
   run_forecast = 1,
-  exp_yn = 1,
+  exp_yn = 0,
   process_error_toggle = 1,
   number_quantiles = 3,
   quantiles_calc = c(0.05, 0.5, 0.95),
@@ -349,7 +350,7 @@ stan_data <- list(
   known_historic_f = 1,
   sigma_obs_cv = 0.1,
   h = 0.8,
-  dcap = 1/3
+  dcap = 1
 )
 
 # only run 1 iteration with Fixed_param
@@ -359,24 +360,61 @@ max_treedepth <-  10
 n_chains <-  1
 n_cores <- 1
 
-cmdstan_notog_model <- cmdstan_model( here::here("src","process_sdm.stan"))
+stan_model_fit <-
+  stan(
+    file = here::here("src", "process_sdm.stan"),
+    # check that it's the right model!
+    data = stan_data,
+    chains = n_chains,
+    warmup = warmups,
+    init = list(
+      list(
+        log_mean_recruits = 5,
+        theta_d = 1.4,
+        p_length_50_sel = .25,
+        alpha = .14,
+        Topt = 18
+      )
+    )
+    ,
+    iter = total_iterations,
+    cores = n_cores,
+    refresh = 250,
+    control = list(max_treedepth = max_treedepth,
+                   adapt_delta = 0.85),
+    seed = 42,
+    algorithm = "Fixed_param"
+  )
 
-testdir <- here("results","fixed_param_test")
+fixed_param_density <- tidybayes::spread_draws(stan_model_fit, density_hat[patch, year])
 
-dir.create(testdir)
+fixed_param_density |> 
+  ggplot(aes(year, density_hat)) + 
+  geom_point() + 
+  facet_wrap(~patch, scales = "free_y")
 
-stan_model_fit <- cmdstan_notog_model$sample(
-  fixed_param = TRUE,
-  data = stan_data,
-  chains = n_chains, 
-  iter_warmup = 1, 
-  iter_sampling = 1,
-  seed = 42,
-  parallel_chains = n_cores, 
-  refresh = 250, 
-  output_dir = testdir,
-  output_basename = "fixed_params"
-)
+
+# cmdstan_notog_model <- cmdstan_model( here::here("src","process_sdm.stan"))
+# 
+# testdir <- here("results","fixed_param_test")
+# 
+# dir.create(testdir)
+# 
+# stan_model_fit <- cmdstan_notog_model$sample(
+#   fixed_param = TRUE,
+#   data = stan_data,
+#   chains = n_chains,
+#   iter_warmup = 1,
+#   iter_sampling = 1,
+#   seed = 42,
+#   parallel_chains = n_cores,
+#   refresh = 250,
+#   output_dir = testdir,
+#   output_basename = "fixed_params",
+#   init = list(list(log_mean_recruits = 5, theta_d = 1.4, p_length_50_sel = .25, alpha = .14, Topt = 18))
+# )
+
+# a = stan_model_fit$draws(variables = c("log_mean_recruits","Topt", "alpha","p_length_50_sel","init_dep","log_r0","width", "raw"))
 
 # ok, so the two things are are fitting to are abund_p_y and n_p_l_y
 # When we fit a model, we generate the "model" version of these, somewhat confusingly named now
@@ -384,13 +422,12 @@ stan_model_fit <- cmdstan_notog_model$sample(
 # So, the idea now is to take the values of dens_p_y_hat and n_p_l_y_hat, and then convert them into data in place of
 # abund_p_y and n_p_l_y, and then fit that model
 
-dim(stan_data$abund_p_y)
-
-str(stan_data$abund_p_y)
-
 # note taht parameters are fixed at their starting guesses
 
-theta_d = stan_model_fit$draws(c("theta_d","log_mean_recruits","p_length_50_sel","density_hat"))
+# theta_d = stan_model_fit$draws(c("theta_d","log_mean_recruits","p_length_50_sel","density_hat"))
+
+
+theta_d <-  extract(stan_model_fit, "theta_d")
 
 
 log_mean_recruits <-  extract(stan_model_fit, "log_mean_recruits")
@@ -402,12 +439,29 @@ p_length_50_sel <-  extract(stan_model_fit, "p_length_50_sel")
 p_length_50_sel$p_length_50_sel
 
 # now need to wrangle this into a patch x year matrix
+
+
+
+
 new_abund_p_y <-  extract(stan_model_fit, "density_hat")
+
+new_abund_p_y <- new_abund_p_y$density_hat[1,,] # first iteration, all patches, all years. Note that this would work even if you had more than 1 iteration since with Fixed_params every iteration is the same
+
+
+observed_density <- new_abund_p_y |> 
+  as.data.frame() |> 
+  mutate(patch = 1:length(patches)) |> 
+  pivot_longer(-patch, names_to = "year", values_to = "density", names_prefix = list(year = "V"), names_transform = list(year = as.integer))
+
+observed_density |> 
+  ggplot(aes(year, density)) + 
+  geom_point() + 
+  facet_wrap(~patch)
+
 # because life is annoying, this is a list with dimensions iteration, patch, year. because we only used 1 interation (warmup = 0, iter = 1), we don'tn eed to worry about iterations, so just need to collapse this list back down to something more usable. 
 # 
 # Could use tidybayes for this but sticking with base for now just to show how it's really working
 
-new_abund_p_y <- new_abund_p_y$density_hat[1,,] # first iteration, all patches, all years. Note that this would work even if you had more than 1 iteration since with Fixed_params every iteration is the same
 
 plot(new_abund_p_y[4,])
 
@@ -439,7 +493,7 @@ temp <- array(NA, dim = dim(stan_data$n_at_length))
 for( i in 1:stan_data$ny_train){
   
   
-  temp[,,i] <- as.integer(round(new_n_p_l_y[i,,] * 5e9)) # oh right, these have to be integers, and for some reason these are crazy small numbers, so just multipldying by something crazy big to make the rounding not set things to 0
+  temp[,,i] <- as.integer(round(new_n_p_l_y[i,,] * 2)) # oh right, these have to be integers, and for some reason these are crazy small numbers, so just multipldying by something crazy big to make the rounding not set things to 0
   
 }
 
@@ -458,53 +512,53 @@ fixed_param_stan_data$dens <- new_abund_p_y
 
 # now fit to the fixed_param generated thingy
 
-warmups <- 10
-total_iterations <- 20
+warmups <- 1000
+total_iterations <- 2000
 max_treedepth <-  10
 n_chains <-  1
 n_cores <- 1
 
+# 
+# cmdstan_notog_model <- cmdstan_model( here::here("src","process_sdm.stan"))
+# 
+# testdir <- here("results","fixed_param_test")
+# 
+# dir.create(testdir)
 
-cmdstan_notog_model <- cmdstan_model( here::here("src","process_sdm.stan"))
-
-testdir <- here("results","fixed_param_test")
-
-dir.create(testdir)
-
-fixed_param_stan_model_fit <- cmdstan_notog_model$sample(
-  data = stan_data,
-  chains = n_chains, 
-  seed = 42,
-  iter_warmup = warmups, 
-  iter_sampling = total_iterations - warmups,
-  parallel_chains = n_cores, 
-  refresh = 250, 
-  max_treedepth = max_treedepth,
-  adapt_delta = 0.85,
-  output_dir = testdir,
-  output_basename = "testing"
-)
-
-things <- tidybayes::spread_draws(fixed_param_stan_model_fit, n_at_age_proj[year, patch, age],centroid_proj[year],ndraws = 2)
-
-
-get_stanfit <- function(run_name){
-  
-  results_path <- here::here("results", run_name)
-  
-  stan_csvs <- list.files(results_path)
-  
-  stan_csvs <- file.path(results_path,stan_csvs[grepl("*.csv",stan_csvs)])
-  
-  out <-  rstan::read_stan_csv(stan_csvs)
-  
-}
+# fixed_param_stan_model_fit <- cmdstan_notog_model$sample(
+#   data = stan_data,
+#   chains = n_chains, 
+#   seed = 42,
+#   iter_warmup = warmups, 
+#   iter_sampling = total_iterations - warmups,
+#   parallel_chains = n_cores, 
+#   refresh = 250, 
+#   max_treedepth = max_treedepth,
+#   adapt_delta = 0.85,
+#   output_dir = testdir,
+#   output_basename = "testing"
+# )
+# 
+# things <- tidybayes::spread_draws(fixed_param_stan_model_fit, n_at_age_proj[year, patch, age],centroid_proj[year],ndraws = 2)
 
 
-fixed_param_stan_model_fit <- get_stanfit("fixed_param_test")
+# get_stanfit <- function(run_name){
+#   
+#   results_path <- here::here("results", run_name)
+#   
+#   stan_csvs <- list.files(results_path)
+#   
+#   stan_csvs <- file.path(results_path,stan_csvs[grepl("*.csv",stan_csvs)])
+#   
+#   out <-  rstan::read_stan_csv(stan_csvs)
+#   
+# }
+
+
+# fixed_param_stan_model_fit <- get_stanfit("fixed_param_test")
 
 fixed_param_stan_model_fit <- stan(file = here::here("src","process_sdm.stan"), # check that it's the right model!
-                       data = stan_data,
+                       data = fixed_param_stan_data,
                        chains = n_chains,
                        warmup = warmups,
                        init = list(list(log_mean_recruits = log(1000000),
@@ -518,10 +572,54 @@ fixed_param_stan_model_fit <- stan(file = here::here("src","process_sdm.stan"), 
                        seed = 42
 )
 
-p_length_50_sel <-  extract(fixed_param_stan_model_fit, "p_length_50_sel")
+estimated_things <-  extract(fixed_param_stan_model_fit, c("p_length_50_sel", "theta_d", "log_mean_recruits"))
 
-p_length_50_sel$p_length_50_sel
+estimated_things$p_length_50_sel
 
-hist(p_length_50_sel$p_length_50_sel)
+hist(estimated_things$p_length_50_sel)
 
 # now go through and check the fits, if everything is working right the model should fit the generated data perfectly, and should reciver all the parameters etc. If not, it means there are weird pathologies in the model, likely related to multiple stable states
+
+estimated_density <- tidybayes::spread_draws(fixed_param_stan_model_fit, density_hat[patch, year])
+
+observed_density <- fixed_param_stan_data$dens |> 
+  as.data.frame() |> 
+  mutate(patch = 1:length(patches)) |> 
+  pivot_longer(-patch, names_to = "year", values_to = "density", names_prefix = list(year = "V"), names_transform = list(year = as.integer))
+
+estimated_density |> 
+ggplot(aes(year, density_hat)) + 
+geom_point(data = observed_density, aes(year, density), color = "red") +
+stat_lineribbon(alpha = 0.5) +
+  facet_wrap(~patch, scales = "free_y") + 
+  scale_fill_brewer()
+
+
+## Repeat for length comps
+## 
+estimated_lcomps <- tidybayes::spread_draws(fixed_param_stan_model_fit, n_at_length_hat[year,patch, length_bin], ndraws = 10)
+
+observed_lcomps <- data.frame(
+  expand.grid(lapply(dim(fixed_param_stan_data$n_at_length), seq_len)),
+  value = as.vector(fixed_param_stan_data$n_at_length)
+) |> 
+  rename(patch = Var1, length_bin = Var2, year = Var3) |> 
+  as_tibble() |> 
+  filter(year %in% c(min(year), max(year)))  |> 
+  group_by(year, patch) |> 
+  mutate(value = value / sum(value))
+  
+  
+  
+a = estimated_lcomps |> 
+  ungroup() |> 
+  filter(year %in% c(min(year), max(year))) |> 
+  group_by(year, patch, .draw) |> 
+  mutate(n_at_length_hat = n_at_length_hat / sum(n_at_length_hat)) |> 
+  ungroup() |> 
+  ggplot(aes(length_bin,n_at_length_hat)) +
+  geom_point(data = observed_lcomps, aes(length_bin, value), color = "red") +
+  stat_lineribbon() + 
+  scale_fill_brewer() +
+  facet_grid(patch ~ year, scales = "free_y")
+
