@@ -1,6 +1,7 @@
 
 set.seed(42)
 library(tidyverse)
+library(ggridges)
 library(tidybayes)
 #library(Cairo)
 library(here)
@@ -20,17 +21,17 @@ sapply(funs, function(x)
 
 # which range edges should be calculated?
 quantiles_calc <- c(0.05, 0.5, 0.95)
-
-ctrl_file <- read_csv("control_file.csv") %>%
-  filter(eval_l_comps==0,
-         spawner_recruit_relationship==1,
-         process_error_toggle==1,
-         known_f==1
-         ) 
+ctrl_file <- read_csv("control_file.csv")
+# ctrl_file <- read_csv("control_file.csv") %>% 
+#   filter(eval_l_comps==0,
+#          spawner_recruit_relationship==1,
+#          process_error_toggle==1,
+#          known_f==1
+#          )
 fit_drms <- TRUE
 make_plots <- TRUE
-iters <- 20
-warmups <- 10
+iters <- 12000
+warmups <- 2000
 
 for(k in 1:nrow(ctrl_file)){
   i = ctrl_file$id[k]  
@@ -59,8 +60,8 @@ for(k in 1:nrow(ctrl_file)){
       known_historic_f = drm_fits$known_historic_f,
       warmup = warmups,
       iter = iters,
-      chains = 1,
-      cores = 1,
+      chains = 4,
+      cores = 4,
       run_forecast = 1,
       quantiles_calc = quantiles_calc, 
     )
@@ -115,6 +116,8 @@ for(k in 1:nrow(ctrl_file)){
     num_iters <- length(get_divergent_iterations(diagnostic_fit))
     num_max_treedepth <- get_num_max_treedepth(diagnostic_fit)
     bfmi <- get_bfmi(diagnostic_fit)
+   # rhat <- rstan::Rhat(diagnostic_fit)
+  #  bulk_ess <- rstan::ess_bulk(diagnostic_fit)
     
     diagnostic_ls <- list(num_divergent=num_divergent, num_iters=num_iters, num_max_treedepth=num_max_treedepth, bfmi=bfmi)
     
@@ -214,9 +217,21 @@ for(k in 1:nrow(ctrl_file)){
       labs(title="Estimated")
     
     # other parameters 
-    sigma_obs_hat <-  rstan::extract(diagnostic_fit,"sigma_obs")[[1]]
+    raw <-  rstan::extract(diagnostic_fit,"raw")[[1]]
+
+    gg_raw <- raw %>% 
+      as.data.frame() %>% 
+      pivot_longer(cols = everything(), names_to="year", values_to="value") %>% 
+      mutate(year = gsub("V", "", year)) %>% 
+      ggplot(aes(x=value, y=as_factor(year))) +
+      geom_density_ridges(scale=4) +
+      theme_ridges() +
+      labs(x="Estimate", y="Year", title="Raw") +
+      coord_cartesian(clip = "off") 
     
-    theta_d <-  rstan::extract(diagnostic_fit,"sigma_obs")[[1]]
+   gg_params_small <- plot(diagnostic_fit, pars=c('sigma_obs','d','width','alpha','beta_obs','theta_d','beta_obs_int','sigma_r_raw','beta_t','beta_rec','p_length_50_sel'))
+   
+   gg_params_large <- plot(diagnostic_fit, pars=c('sel_delta','log_mean_recruits','log_r0','Topt'))
     
     # length frequency 
     n_at_length_hat <- rstan::extract(diagnostic_fit,"n_at_length_hat")[[1]]
@@ -262,26 +277,23 @@ for(k in 1:nrow(ctrl_file)){
       group_by(year) %>%
       summarise(centroid_lat = weighted.mean(x=patch, w=abundance) + (min(patches)-1))
     
-    # centroid_plot <- ggplot() +
-    #   geom_line(data=range_quantiles_proj, aes(x=year, y=lat, color=quantile)) + 
-    #   geom_point(data=dat_centroid_proj, aes(x=year, y=centroid_lat), color="red")
-    # 
+    # save plots of model fit 
     ggsave(observed_abundance_tile, filename=file.path(results_path, "observed_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
     ggsave(estimated_abundance_tile, filename=file.path(results_path,"estimated_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
-    
-    ggsave(proj_estimated_abundance_tile, filename=file.path(results_path,"proj_estimated_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
-    ggsave(proj_observed_abundance_tile, filename=file.path(results_path,"proj_observed_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
-    
-    
-    ggsave(observed_abundance_forecast, filename=file.path(results_path,"abundance_est_v_time_by_patch_proj.png"), dpi=300, width=10, height=5)
     ggsave(abundance_v_time, filename=file.path(results_path,"abundance_est_v_time_by_patch.png"), dpi=300, width=10, height=5)
     
-    #  ggsave(abundance_forecast, filename=here(paste0("results/",i), "abundance_est_v_time_by_patch_proj.png"), dpi=300, width=10, height=5) 
+    # save plots of model forecast 
+    ggsave(proj_estimated_abundance_tile, filename=file.path(results_path,"proj_estimated_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
+    ggsave(proj_observed_abundance_tile, filename=file.path(results_path,"proj_observed_abundance_v_time_tileplot.png"), scale=0.9, width=6, height=5)
+    ggsave(observed_abundance_forecast, filename=file.path(results_path,"abundance_est_v_time_by_patch_proj.png"), dpi=300, width=10, height=5)
     
+    # save plots of parameter posteriors 
     ggsave(gg_length, filename=file.path(results_path,"length_dist_first_last_year.png"), dpi=300, width=5, height=10)
+    ggsave(gg_raw, filename=file.path(results_path,"raw_posterior.png"), dpi=300, width=5, height=10)
+    ggsave(gg_params_large, filename=file.path(results_path,"param_posteriors_large.png"), dpi=300, width=6, height=5)
+    ggsave(gg_params_small, filename=file.path(results_path,"param_posteriors_small.png"), dpi=300, width=6, height=5)
     
     # write out data for summary stats
-    
     write_csv(range_quantiles_proj, file=file.path(results_path,"range_quantiles_proj.csv"))
     write_csv(centroid_proj, file=file.path(results_path,"centroid_proj.csv"))
     write_csv(observed_abund_posterior_predictive, file=file.path(results_path,"density_obs_proj.csv"))
