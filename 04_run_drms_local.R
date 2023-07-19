@@ -30,8 +30,10 @@ ctrl_file <- read_csv("control_file.csv")
 #          )
 fit_drms <- TRUE
 make_plots <- TRUE
-iters <- 12000
-warmups <- 2000
+iters <- 4000
+warmups <- 1000
+chains <- 2
+cores <- 2
 
 for(k in 1:nrow(ctrl_file)){
   i = ctrl_file$id[k]  
@@ -60,8 +62,9 @@ for(k in 1:nrow(ctrl_file)){
       known_historic_f = drm_fits$known_historic_f,
       warmup = warmups,
       iter = iters,
-      chains = 4,
-      cores = 4,
+      chains = chains,
+      cores = cores,
+      adapt_delta = 0.99, 
       run_forecast = 1,
       quantiles_calc = quantiles_calc, 
     )
@@ -261,14 +264,14 @@ for(k in 1:nrow(ctrl_file)){
     range_quantiles_proj <- tidybayes::spread_draws(diagnostic_fit, range_quantiles_proj[quantile, year]) %>%
       mutate(quantile = as.factor(quantiles_calc[quantile]), .keep="unused") 
     
-    boop <- dat_test_dens %>% 
-      group_by(year) %>%
-      mutate(sumdens = sum(mean_dens)) %>%
-      arrange(patch) %>%
-      mutate(csum_dens = cumsum(mean_dens) / sumdens, 
-             diff_p = csum_dens - 0.05) %>%
-      group_by(year) %>% 
-      filter(diff_p == min(abs(diff_p)))
+    # boop <- dat_test_dens %>% 
+    #   group_by(year) %>%
+    #   mutate(sumdens = sum(mean_dens)) %>%
+    #   arrange(patch) %>%
+    #   mutate(csum_dens = cumsum(mean_dens) / sumdens, 
+    #          diff_p = csum_dens - 0.05) %>%
+    #   group_by(year) %>% 
+    #   filter(diff_p == min(abs(diff_p)))
     
     
     
