@@ -571,9 +571,13 @@ transformed parameters{
   matrix[np, n_ages] init_n_at_age;
   
   
+  
   init_n_at_age = rep_matrix(0, np, n_ages);
   
   d_at_age = rep_vector(0 ,n_ages);
+  
+  unfished = rep_vector(0 ,n_ages);
+
   
   for (a in 1:n_ages){
     if (a >= age_at_maturity){

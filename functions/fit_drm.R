@@ -118,44 +118,17 @@ fit_drm <- function(amarel = FALSE,
                        drm_name,
                        '.stan')
   }
+  drm_model <- cmdstan_model( here::here("src","process_sdm.stan"))
   
-  # drm_model <- cmdstan_model( here::here("src","process_sdm.stan"))
-  
-  # stan_model_fit = drm_model$sample(
-  #   data = stan_data,
-  #   chains = chains,
-  #   iter_warmup = warmup,
-  #   iter_sampling = iter - warmup,
-  #   parallel_chains = cores,
-  #   refresh = refresh,
-  #   max_treedepth = max_treedepth,
-  #   adapt_delta = 0.85,
-  #   output_dir = results_path,
-  #   output_basename = "stan_model_fit",
-  #   init = lapply(1:chains, function(x)
-  #     list(
-  #       Topt = jitter(12, 4),
-  #       log_r0 = jitter(10, 5),
-  #       beta_obs = jitter(1e-6, 4),
-  #       beta_obs_int = jitter(-10, 2)
-  #     ))
-  # )
-
-
-  # stan_model_fit$save_object(file = file.path(results_path,
-  #                                      "stan_model_fit.rds"))
-  # 
-  
-  stan_model_fit <- stan(
-    file = stan_file,
+  stan_model_fit = drm_model$sample(
     data = stan_data,
     chains = chains,
-    warmup = warmup,
-    iter = iter,
-    cores = cores,
+    iter_warmup = warmup,
+    iter_sampling = iter - warmup,
+    parallel_chains = cores,
     refresh = refresh,
-    control = list(max_treedepth = max_treedepth,
-                   adapt_delta = 0.85),
+    max_treedepth = max_treedepth,
+    adapt_delta = 0.85,
     init = lapply(1:chains, function(x)
       list(
         Topt = jitter(12, 4),
@@ -165,8 +138,37 @@ fit_drm <- function(amarel = FALSE,
       ))
   )
 
-  readr::write_rds(stan_model_fit, file = file.path(results_path,
-                                                  "stan_model_fit.rds"))
+
+stan_model_fit$save_object(file = file.path(results_path,
+                                     "stan_model_fit.rds"))
+
+# fit <- readRDS(file.path(results_path,
+#                          "stan_model_fit.rds"))
+# browser()
+#   
+#   stan_model_fit <- stan(
+#     sample_file = file.path(results_path,paste0(run_name,".csv")),
+#     diagnostic_file = file.path(results_path,paste0(run_name,"_diagnostics.csv")),
+#     file = stan_file,
+#     data = stan_data,
+#     chains = chains,
+#     warmup = warmup,
+#     iter = iter,
+#     cores = cores,
+#     refresh = refresh,
+#     control = list(max_treedepth = 8,
+#                    adapt_delta = 0.95),
+#     init = lapply(1:chains, function(x)
+#       list(
+#         Topt = jitter(12, 4),
+#         log_r0 = jitter(10, 5),
+#         beta_obs = jitter(1e-6, 4),
+#         beta_obs_int = jitter(-10, 2)
+#       ))
+#   )
+  rm(stan_model_fit)
+  # readr::write_rds(stan_model_fit, file = file.path(results_path,
+  #                                                 "stan_model_fit.rds"))
   # didn't work on HPC
   
   # readr::write_rds(stan_model_fit, file = file.path(results_path,
@@ -188,7 +190,7 @@ fit_drm <- function(amarel = FALSE,
   # # abundance_v_time
   # ggsave(abundance_v_time, filename=file.path(results_path,"abundance_fits.pdf"), width=7, height=4)
   #
-  
-  return(stan_model_fit)
+  gc()
+  return("all done")
   
 } # close fit_drm
