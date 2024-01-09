@@ -114,6 +114,33 @@ gam_summary <- spdata_proj %>%
          id = "GAM") 
 
 ######
+# make persistence forecast
+######
+
+
+persistence <- dat_train_dens %>% 
+  filter(year == max(year)) %>% 
+  summarise(
+    warm_edge = wtd.quantile(lat_floor, weights=mean_dens, probs=0.05),
+    centroid = weighted.mean(lat_floor, w=mean_dens),
+    cold_edge = wtd.quantile(lat_floor, weights=mean_dens, probs=0.95),
+    abund = sum(mean_dens) * meanpatcharea) 
+
+persistence_dat <- data.frame(year = years_proj) %>% 
+  bind_rows(persistence) %>% 
+  fill(warm_edge, centroid, cold_edge, abund, .direction="up") %>% 
+  filter(!is.na(year)) %>% 
+  mutate(model_name = "Null") 
+
+persistence_summary <- persistence_dat %>% 
+  pivot_longer(cols=warm_edge:abund, names_to="feature", values_to="value_tmp") %>% 
+  left_join(dat_test_patch)%>% # compare  to true data 
+  mutate(resid = value_tmp - value, 
+         resid_sq = resid^2, 
+         .keep = "unused", # drop all the columns used in calculations 
+         id = "Null") 
+
+######
 # get DRMs
 ######
 
@@ -172,16 +199,17 @@ drm_summary <- drm_out %>%
   summarise(resid = mean(resid)) %>% 
   mutate(resid_sq = resid^2)
 
-dat_forecasts <- bind_rows(gam_summary, drm_summary) %>% 
-  left_join(ctrl_file %>% select(id, model_name))  %>% 
-  mutate(model_name = replace_na(model_name, 'GAM'))
+dat_forecasts <- drm_summary %>% 
+  left_join(ctrl_file %>% select(id, model_name)) %>% 
+  bind_rows(gam_summary %>% mutate(model_name="GAM"), persistence_summary %>% mutate(model_name="Null"))%>% 
+  filter(feature %in% c('centroid','cold_edge','warm_edge')) # ABUNDANCE METRICS NOT WORKING
 
 # pool across years to calculate bias and RMSE
 dat_forecasts_summ <- dat_forecasts %>% 
   group_by(feature, id, model_name) %>% 
   summarise(RMSE = sqrt(mean(resid_sq)), 
             Bias = mean(resid)) %>% 
-  pivot_longer(cols=c(RMSE, Bias), values_to="value", names_to="metric")
+  pivot_longer(cols=c(RMSE, Bias), values_to="value", names_to="metric") 
 
 #####
 # plots 
@@ -190,12 +218,24 @@ dat_forecasts_summ <- dat_forecasts %>%
 gg_metrics <- dat_forecasts_summ  %>% 
   ggplot(aes(x=feature, y=value, color=model_name, fill=model_name, shape = model_name)) + 
   geom_point(size=3) +
-  scale_color_manual(values= wesanderson::wes_palette("Darjeeling1", n = 5)) +
+#  scale_color_manual(values= wesanderson::wes_palette("Darjeeling1", n = length(unique(dat_forecasts_summ$id)))) +
   theme_bw() + 
   facet_wrap(~metric, scales="free_y") +
   labs(x="Feature", y="Metric") + 
   theme(legend.position = "bottom")
 gg_metrics
+
+gg_real <- dat_test_patch %>% 
+  filter(feature %in% c('centroid','cold_edge','warm_edge')) %>% 
+  ggplot(aes(x=year, y=value )) + 
+  geom_line() +
+  geom_point() +
+  theme_bw() + 
+  labs(x="Year", y="Latitude") + 
+  facet_wrap(~feature, ncol=1)
+gg_real
+
+gg_real_plus <- 
 
 gg_bias <- dat_forecasts %>% 
   ggplot(aes(x=year, y=resid,color=model_name, fill=model_name, shape = model_name )) + 
