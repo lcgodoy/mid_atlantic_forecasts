@@ -1,12 +1,11 @@
 set.seed(42)
 library(tidyverse)
 library(tidybayes)
-library(Cairo)
 library(here)
 library(magrittr)
-library(rstan)
+library(cmdstanr)
+library(bayesplot)
 library(Matrix)
-library(rstanarm)
 
 rstan_options(javascript = FALSE, auto_write = TRUE)
 
@@ -18,47 +17,65 @@ load(here("processed-data","stan_data_prep.Rdata"))
 
 ctrl_file <- read_csv("control_file.csv")
 
-sample_run <- ctrl_file$id[1]
+sample_run <- "no-pois"
 
 sample_fit <- read_rds(here("results",sample_run,"stan_model_fit.rds"))
 
+draw <- 42
 
-sigma_obs <- mean(extract(sample_fit, "sigma_obs")[[1]])
+sigma_obs <- diagnostic_fit$draws(variables = "sigma_obs")[[draw]]
 
-sample_abund_p_y <- (extract(sample_fit, "dens_p_y_hat")[[1]][1,,]) # get a random draw from posterior of 'abundance'
+sample_abund_p_y <- gather_draws(diagnostic_fit, density_hat[patch, year]) |> 
+  filter(.draw == draw)
 
-sample_n_p_l_y <- round(extract(sample_fit, "n_p_l_y_hat")[[1]][1,,,]) # get a random draw from posterior of length comps
+sample_abund_p_y |> 
+  ggplot(aes(year, .value)) + 
+  geom_point() + 
+  facet_wrap(~patch)
+
+
+
+sample_n_p_l_y <- gather_draws(diagnostic_fit, n_at_length_hat[year, patch, length]) |> 
+  filter(.draw == draw)
+
+sample_n_p_l_y |> 
+  ggplot(aes(length, .value, color = factor(year))) + 
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~patch)
+  
+
 year = 12
+
 patch = 5
-before <- sample_n_p_l_y[year,patch,]
 
 # ugh. n_p_l_y_hat is different dimensions than n_p_l_y. reshaping to match inputs
-being_lazy <- len
 
 no_error <- sample_abund_p_y
+
+new_len <- array(NA, dim = dim(len))
+
+new_dens <- matrix(NA, nrow = np, ncol = ny)
+
 
 for (y in 1:ny){
   
   for (p in 1:np){
     
-    sample_abund_p_y[p,y] <- exp(rnorm(1, log(sample_abund_p_y[p,y] + 1e-6), sigma_obs)) # manually add observation error since no posterior predictive yet, change this once new fits are in
+    new_len[p,,y] <- sample_n_p_l_y$.value[sample_n_p_l_y$year == y & sample_n_p_l_y$patch == p]
+     
+    tmp <- sample_abund_p_y$.value[sample_abund_p_y$year == y & sample_abund_p_y$patch == p]
     
-    being_lazy[p,,y] <- sample_n_p_l_y[y,p,]
+    new_dens[p,y] <- exp(rnorm(1, log(tmp + 1e-6), sigma_obs)) # manually add observation error since no posterior predictive yet, change this once new fits are in
     
   }
 }
 
-sample_n_p_l_y <- being_lazy
-
-plot(before)
-
-after <- sample_n_p_l_y[patch,,year]
-
-lines(after)
 
 drm_name <-  "process_sdm"
 
 do_dirichlet <- 1
+
+use_poisson_link <- 0
 
 eval_l_comps <-  1
 
@@ -95,78 +112,92 @@ number_quantiles = 3
 quantiles_calc = c(0.05, 0.5, 0.95)
 
 
-
 stan_data <- list(
-  np=np,
-  n_ages=n_ages,
-  ny_train=ny,
-  ny_proj=ny_proj,
-  n_lbins=n_lbins,
-  n_p_l_y = sample_n_p_l_y,
-  abund_p_y = sample_abund_p_y,
+  np = np,
+  patches = patches,
+  n_ages = n_ages,
+  ny_train = ny,
+  ny_proj = ny_proj,
+  n_lbins = n_lbins,
+  n_at_length = new_len,
+  dens = new_dens,
+  area =  matrix(1, nrow = nrow(dens), ncol = ncol(dens)),
   sbt = sbt,
-  sbt_proj=sbt_proj,
-  m=m,
-  f=f,
-  f_proj=f_proj,
-  k=k,
-  loo=loo,
-  t0=t0,
-  cv=cv,
-  length_50_sel_guess=length_50_sel_guess,
-  n_lbins = n_lbins, 
+  sbt_proj = sbt_proj,
+  m = m,
+  f = f,
+  f_proj = f_proj,
+  k = k,
+  loo = loo,
+  t0 = t0,
+  cv = cv,
+  length_50_sel_guess = length_50_sel_guess,
   age_sel = age_sel,
-  bin_mids=bin_mids,
-  sel_100=sel_100,
+  bin_mids = bin_mids,
+  sel_100 = sel_100,
   age_at_maturity = age_at_maturity,
   l_at_a_key = l_at_a_mat,
   wt_at_age = wt_at_age,
   do_dirichlet = do_dirichlet,
-  eval_l_comps = eval_l_comps, # evaluate length composition data? 0=no, 1=yes
-  T_dep_mortality = T_dep_mortality, # CURRENTLY NOT REALLY WORKING
-  T_dep_recruitment = T_dep_recruitment, # think carefully before making more than one of the temperature dependencies true,
+  eval_l_comps = eval_l_comps,
+  # evaluate length composition data? 0=no, 1=yes
+  T_dep_mortality = T_dep_mortality,
+  # CURRENTLY NOT REALLY WORKING
+  T_dep_recruitment = T_dep_recruitment,
+  # think carefully before making more than one of the temperature dependencies true,
   T_dep_movement = T_dep_movement,
-  spawner_recruit_relationship = spawner_recruit_relationship, 
-  run_forecast=run_forecast,
+  spawner_recruit_relationship = spawner_recruit_relationship,
+  run_forecast = run_forecast,
   exp_yn = exp_yn,
   process_error_toggle = process_error_toggle,
   number_quantiles = number_quantiles,
   quantiles_calc = quantiles_calc,
   sigma_obs_cv = 0.1,
-  h = 0.8
+  h = h,
+  dcap = 1 / 3,
+  use_poisson_link = use_poisson_link
+)
+nums <- 100 * exp(-.2 * (0:(n_ages - 1)))
+
+drm_model <- cmdstan_model( here::here("src","poisson_link_process_sdm.stan"))
+
+diagnostic_fit = drm_model$sample(
+  data = stan_data,
+  chains = chains,
+  iter_warmup = warmup,
+  iter_sampling = iter - warmup,
+  parallel_chains = cores,
+  refresh = refresh,
+  max_treedepth = max_treedepth,
+  adapt_delta = 0.85,
+  init = lapply(1:chains, function(x)
+    list(
+      Topt = jitter(12, 4),
+      log_r0 = jitter(10, 5),
+      beta_obs = jitter(1e-6, 4),
+      beta_obs_int = jitter(-10, 2)
+    ))
 )
 
-diagnostic_fit <- stan(file = here::here("src",paste0(drm_name,".stan")), # check that it's the right model!
-                       data = stan_data,
-                       chains = chains,
-                       warmup = warmup,
-                       iter = iter,
-                       cores = cores,
-                       refresh = refresh,
-                       control = list(max_treedepth = max_treedepth,
-                                      adapt_delta = 0.85),
-                       init = lapply(1:chains, function(x) list(Topt = jitter(12,4),
-                                                                log_r0 = jitter(10,5),
-                                                                beta_obs = jitter(1e-6,4),
-                                                                beta_obs_int = jitter(-10,2)))
-)
+write_rds(diagnostic_fit, file = "diagnostic_fit.rds")
 
 
+dens_p_y_hat <- tidybayes::spread_draws(diagnostic_fit, density_hat[patch,year], ndraws = 2)
+
+testy <- tidybayes::spread_draws(sample_fit,lp__, r0, ndraws = 200)
+
+testy |> 
+  ggplot(aes(r0, lp__)) + 
+  geom_point() + 
+  geom_smooth()
 
 
-dens_p_y <- sample_abund_p_y %>% 
-  as.data.frame() %>% 
-  mutate(patch = 1:nrow(.)) %>% 
-  pivot_longer(-patch, names_to = "year", values_to = "density",
-               names_prefix = "V", names_transform = list(year = as.integer))
-
-dens_p_y_hat <- tidybayes::spread_draws(diagnostic_fit, dens_p_y_hat[patch,year], ndraws = 2)
-
+draws_df <- sample_fit$draws(format = "df", variables = c("lp__" ,"density_hat"))
 
 abundance_v_time <- dens_p_y_hat %>% 
-  ggplot(aes(year, dens_p_y_hat)) + 
+  ggplot(aes(year, density_hat)) + 
   stat_lineribbon() +
-  geom_point(data = dens_p_y, aes(year, density), color = "red") +
+  geom_point(data = sample_abund_p_y, aes(year, .value), color = "red") +
   facet_wrap(~patch, scales = "free_y") +
   labs(x="Year",y="Density") + 
   scale_fill_brewer()

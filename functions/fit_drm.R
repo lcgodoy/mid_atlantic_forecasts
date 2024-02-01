@@ -1,4 +1,5 @@
 fit_drm <- function(amarel = FALSE,
+                    use_poisson_link = FALSE,
                     run_name = "test",
                     results_path = file.path("results", run_name),
                     create_dir = TRUE,
@@ -63,7 +64,6 @@ fit_drm <- function(amarel = FALSE,
   if (T_dep_movement == 1) {
     dcap = 1
   }
-  
   stan_data <- list(
     np = np,
     patches = patches,
@@ -73,6 +73,7 @@ fit_drm <- function(amarel = FALSE,
     n_lbins = n_lbins,
     n_at_length = len,
     dens = dens,
+    area =  matrix(1, nrow = nrow(dens), ncol = ncol(dens)),
     sbt = sbt,
     sbt_proj = sbt_proj,
     m = m,
@@ -105,7 +106,8 @@ fit_drm <- function(amarel = FALSE,
     quantiles_calc = quantiles_calc,
     sigma_obs_cv = sigma_obs_cv,
     h = h,
-    dcap = dcap
+    dcap = dcap,
+    use_poisson_link = use_poisson_link
   )
   nums <- 100 * exp(-.2 * (0:(n_ages - 1)))
   
@@ -118,7 +120,7 @@ fit_drm <- function(amarel = FALSE,
                        drm_name,
                        '.stan')
   }
-  drm_model <- cmdstan_model( here::here("src","process_sdm.stan"))
+  drm_model <- cmdstan_model( here::here("src","poisson_link_process_sdm.stan"))
   
   stan_model_fit = drm_model$sample(
     data = stan_data,
@@ -137,7 +139,6 @@ fit_drm <- function(amarel = FALSE,
         beta_obs_int = jitter(-10, 2)
       ))
   )
-
 
 stan_model_fit$save_object(file = file.path(results_path,
                                      "stan_model_fit.rds"))
