@@ -11,8 +11,7 @@ library(rstanarm)
 library(cmdstanr)
 library(data.table)
 
-ctrl_file <- read_csv("control_file.csv") %>% 
-  filter(!id %in% c('v0.28','v0.43'))
+ctrl_file <- read_csv("control_file.csv") 
 
 datalist = list()
 
