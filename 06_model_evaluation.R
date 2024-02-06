@@ -9,10 +9,10 @@ set.seed(42)
 library(tidyverse)
 library(magrittr)
 library(here)
-library(Hmisc) # for wtd.quantile() 
+#library(Hmisc) # for wtd.quantile() 
 library(mgcv)
 library(tidybayes)
-
+library(ggrepel)
 # read in data 
 convergence_checks <- read_csv(file=here("results","convergence_checks.csv"))
 ctrl_file <- read_csv(file=here("control_file.csv"))
@@ -30,14 +30,29 @@ summarydat <- convergence_checks %>%
   left_join(ctrl_file) %>% 
   filter(mean_divergences < divergence_cutoff)
 
+# write a function to calculate patch edge positions 
+calculate_range_edge <- function(patches, weights, q){
+  if(length(patches) == length(weights)){
+    cutoff <- q * sum(weights)
+    csum <- cumsum(weights)
+    p <- min(which(csum > cutoff)) 
+    if(p == 1) { # special case when range edge is in the first patch 
+      out <- patches[1] + cutoff / weights[1]
+    } else {
+    dec <- (cutoff - csum[p-1]) / weights[p] # calculate decimal position into the edge patch -- what proportion of the patch would be occupied, assuming a constant density 
+    out <- patches[p] + dec 
+    return(out) }
+  } else {return(print("Length of patches and weights must be equal!"))}
+}
+
 # what actually happened to edge and centroid positions in the testing data?
 # need to keep aggregated at patch scale so we are comparing evenly across models 
 dat_test_patch <- dat_test_dens %>% 
   group_by(year) %>% 
   summarise(
-    warm_edge = wtd.quantile(lat_floor, weights=mean_dens, probs=0.05),
+    warm_edge = calculate_range_edge(patches=lat_floor, weights=mean_dens, q=0.05),
     centroid = weighted.mean(lat_floor, w=mean_dens),
-    cold_edge = wtd.quantile(lat_floor, weights=mean_dens, probs=0.95),
+    cold_edge = calculate_range_edge(patches=lat_floor, weights=mean_dens, q=0.95),
     abund = sum(mean_dens) * meanpatcharea) %>% 
   arrange(year) %>% 
   mutate(year = year + min(years_proj) - 1, 
@@ -116,9 +131,9 @@ gam_summary <- spdata_proj %>%
   summarise(dens_pred = mean(exp(predstt))) %>% # aggregate to patch scale for comparison to DRM 
   group_by(year) %>% # calculate summary stats 
   summarise(
-    warm_edge = wtd.quantile(lat_floor, weights=dens_pred, probs=0.05),
+    warm_edge = calculate_range_edge(patches=lat_floor, weights=dens_pred, q=0.05),
     centroid = weighted.mean(lat_floor, w=dens_pred),
-    cold_edge = wtd.quantile(lat_floor, weights=dens_pred, probs=0.95),
+    cold_edge = calculate_range_edge(patches=lat_floor, weights=dens_pred, q=0.95),
     abund = sum(dens_pred) * meanpatcharea) %>% 
   arrange(year) %>% 
   mutate(abund_lr = log(abund / lag(abund))) %>% # note that this is technically the LR of change from 2007 to 2009 because the GAM doesn't use 2008
@@ -129,6 +144,20 @@ gam_summary <- spdata_proj %>%
          .keep = "unused", # drop all the columns used in calculations 
          id = "GAM") 
 
+gam_time <- spdata_proj %>% 
+  mutate(lat_floor = floor(lat)) %>% 
+  group_by(lat_floor, year) %>% 
+  summarise(dens_pred = mean(exp(predstt))) %>% # aggregate to patch scale for comparison to DRM 
+  group_by(year) %>% # calculate summary stats 
+  summarise(
+    warm_edge = calculate_range_edge(patches=lat_floor, weights=dens_pred, q=0.05),
+    centroid = weighted.mean(lat_floor, w=dens_pred),
+    cold_edge = calculate_range_edge(patches=lat_floor, weights=dens_pred, q=0.95),
+    abund = sum(dens_pred) * meanpatcharea) %>% 
+  arrange(year) %>% 
+  mutate(abund_lr = log(abund / lag(abund))) %>% # note that this is technically the LR of change from 2007 to 2009 because the GAM doesn't use 2008
+  pivot_longer(cols=warm_edge:abund_lr, names_to="feature", values_to="value_tmp") 
+
 ###############
 # MAKE PERSISTENCE FORECAST
 ###############
@@ -136,9 +165,9 @@ gam_summary <- spdata_proj %>%
 persistence <- dat_train_dens %>% 
   filter(year == max(year)) %>% 
   summarise(
-    warm_edge = wtd.quantile(lat_floor, weights=mean_dens, probs=0.05),
+    warm_edge = calculate_range_edge(patches=lat_floor, weights=mean_dens, q=0.05),
     centroid = weighted.mean(lat_floor, w=mean_dens),
-    cold_edge = wtd.quantile(lat_floor, weights=mean_dens, probs=0.95),
+    cold_edge = calculate_range_edge(patches=lat_floor, weights=mean_dens, q=0.95),
     abund = sum(mean_dens) * meanpatcharea) 
 
 persistence_dat <- data.frame(year = years_proj) %>% 
@@ -178,9 +207,15 @@ for(i in 1:nrow(summarydat)){
     mutate(quantile = as.factor(quantiles_calc[quantile]), .keep="unused") 
   
   # save those posteriors
-  #  write_csv(observed_abund_posterior_predictive, file.path(results.tmp, "density_obs_proj.csv"))
-  # write_csv(range_quantiles_proj, file.path(results.tmp, "range_quantiles_proj.csv")) write_csv(centroid_proj, file.path(results.tmp, "centroid_proj.csv")) %>% 
-  #   mutate(year = as.numeric(year)) 
+  write_rds(observed_abund_posterior_predictive, file.path(results_path, "density_obs_proj.rds"))
+  write_rds(range_quantiles_proj, file.path(results_path, "range_quantiles_proj.rds"))
+  write_rds(centroid_proj, file.path(results_path, "centroid_proj.rds")) 
+  
+  # abund_tmp <- observed_abund_posterior_predictive %>%
+  #   mutate(year = year + min(years_proj) - 1) %>%
+  #   group_by(year, .chain, .iteration, .draw) %>%
+  #   summarise(density_obs_proj_sum = sum(density_obs_proj)) %>%
+  #   left_join(dat_test_patch %>% filter(feature=="centroid"))
   
   centroid_tmp <- centroid_proj %>% 
     mutate(year = year + min(years_proj) - 1) %>% 
@@ -216,6 +251,7 @@ for(i in 1:nrow(summarydat)){
   
   drm_out <- bind_rows(drm_out, centroid_tmp, warm_edge_tmp, cold_edge_tmp)
 }
+write_csv(drm_out, file=here("processed-data","posteriors_for_model_evaluation.csv"))
 
 drm_summary <- drm_out %>% 
   filter(!is.na(resid)) %>% 
@@ -226,7 +262,7 @@ drm_summary <- drm_out %>%
 dat_forecasts <- drm_summary %>% 
   left_join(ctrl_file %>% select(id)) %>% 
   bind_rows(gam_summary, persistence_summary)%>% 
-  filter(feature %in% c('centroid','cold_edge','warm_edge')) # ABUNDANCE METRICS NOT WORKING
+  filter(feature %in% c('centroid','cold_edge','warm_edge')) 
 
 # pool across years to calculate bias and RMSE
 dat_forecasts_summ <- dat_forecasts %>% 
@@ -240,14 +276,60 @@ dat_forecasts_summ <- dat_forecasts %>%
 #####
 
 gg_metrics <- dat_forecasts_summ  %>% 
-  ggplot(aes(x=feature, y=value, color=model_name, fill=model_name, shape = model_name)) + 
-  geom_point(size=3) +
-  #  scale_color_manual(values= wesanderson::wes_palette("Darjeeling1", n = length(unique(dat_forecasts_summ$id)))) +
+  mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature),
+         metric = case_match(metric, "rmse" ~ "RMSE", "bias" ~ "Bias", .default=metric), 
+         type = ifelse(str_detect(id, "0."),"DRM", id),
+         metric = factor(metric, levels = c("RMSE","Bias")))  %>%  
+  ggplot(aes(x=feature, y=value)) + 
+  geom_point(aes(color=type, fill=type),size=1) +
+  geom_text_repel(aes(label=id), hjust = 1, max.overlaps = Inf) +
+  scale_color_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
+  scale_fill_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
   theme_bw() + 
   facet_wrap(~metric, scales="free_y") +
   labs(x="Feature", y="Metric") + 
   theme(legend.position = "bottom")
 gg_metrics
+
+gg_metrics2 <- dat_forecasts_summ  %>% 
+  mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature),
+         type = ifelse(str_detect(id, "0."),"DRM", id),
+         metric = factor(metric, levels = c("RMSE","Bias")),
+         id = gsub("v0.", "v", id))  %>%  
+  pivot_wider(names_from = metric, values_from = value) %>% 
+  ggplot(aes(x=RMSE, y=Bias)) + 
+  geom_point(aes(color=type, fill=type),size=1) +
+  geom_text_repel(aes(label=id), hjust = 1, max.overlaps = Inf) +
+  scale_color_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
+  scale_fill_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
+  theme_bw() + 
+  facet_wrap(~feature) +
+  theme(legend.position = "bottom",
+        legend.title=element_blank())
+gg_metrics2
+ggsave(gg_metrics2, filename=here("results","bias_v_rmse.png"), width=110, height=60, dpi=600, units="mm", scale=1.5)
+
+# want to plot dat_test_patch, gam_time, and 
+
+#     gg_length <- n_at_length_hat %>% 
+#       ggplot(aes(length, plength)) +
+#       stat_lineribbon(size = .1) +
+#       geom_point(data = n_p_l_y, aes(length, plength), color = "red", alpha = 0.25) +
+#       facet_grid(patch ~ year, scales = "free_y") + 
+#       scale_x_continuous(limits = c(0, 50)) # generates warnings because of the close-to-zero probabilities at larger lengths
+
+abund_p_y_proj <-  dat_test_dens %>%
+  mutate(abundance = mean_dens * meanpatcharea)
+
+gg_observed_abundance_tile <- abund_p_y_proj %>%
+  mutate(Year = (year + min(years_proj) - 1), Latitude = (patch + min(patches) - 1), Abundance=abundance) %>%
+  ggplot(aes(x=Year, y=Latitude, fill=Abundance)) +
+  geom_tile() +
+  theme_bw() +
+  scale_x_continuous(breaks=seq(min(years_proj), max(years_proj), 1)) +
+  scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
+  scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
+  labs(title="Observed")
 
 gg_real <- dat_test_patch %>% 
   filter(feature %in% c('centroid','cold_edge','warm_edge')) %>% 
