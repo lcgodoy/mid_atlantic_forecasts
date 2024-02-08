@@ -120,7 +120,7 @@ fit_drm <- function(amarel = FALSE,
                        drm_name,
                        '.stan')
   }
-  drm_model <- cmdstan_model( here::here("src","poisson_link_process_sdm.stan"))
+  drm_model <- cmdstan_model( here::here("src",paste0(drm_name, ".stan")))
   
   stan_model_fit = drm_model$sample(
     data = stan_data,

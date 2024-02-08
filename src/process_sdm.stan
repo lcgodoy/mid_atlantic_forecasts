@@ -423,6 +423,8 @@ data {
   
   array[np, ny_train] real dens; // MEAN density of individuals of any age in each haul; used for rescaling the abundance to fit to our data
   
+  array[np, ny_train] real area; // mean area swept per patch per year
+
   // environmental data 
   
   matrix[np, ny_train] sbt; // temperature data for training
@@ -471,6 +473,8 @@ data {
   
   int<lower=0, upper=1> process_error_toggle;
   
+  int<lower=0, upper=1> use_poisson_link;
+
   int number_quantiles;
   
   array[number_quantiles] real quantiles_calc;
@@ -643,11 +647,25 @@ transformed parameters {
                                             .* selectivity_at_bin)'; // convert numbers at age to numbers at length. The assignment looks confusing here because this is an array of length y containing a bunch of matrices of dim p and n_lbins
       // see https://mc-stan.org/docs/2_18/reference-manual/array-data-types-section.html
       density_hat[p, y] = sum(to_vector(n_at_length_hat[y, p, 1 : n_lbins]));
+        if (is_nan(density_hat[p, y])){
+          density_hat[p, y] = 0;
+        }
+       
+      // can add the poisson-link toggle here to calculate theta based on n, not density_hat
+      
+      if (use_poisson_link == 1){
+        
+       theta[p, y] = 1 - exp(-area[p,y] * density_hat[p, y]);
+
+      } else {
+        
       
       theta[p, y] = 1
                     / (1
                        + exp(-(beta_obs_int
                                + beta_obs * log(density_hat[p, y] + 1e-6))));
+                               
+      }
     } // close patches
     
     for (q in 1 : number_quantiles) {
@@ -737,7 +755,18 @@ model {
           } // close if any positive length comps
         } // close eval_length_comps
         
-        log(dens[p, y]) ~ normal(log(density_hat[p, y] + 1e-6), sigma_obs);
+        if (use_poisson_link == 1){
+          
+        log(dens[p, y]) ~ normal(log((density_hat[p, y] + 1e-6)/ (theta[p,y] + 1e-6)) - pow(sigma_obs,2)/2, sigma_obs);
+    
+        } else {
+          
+          if (density_hat[p, y] > 0 && theta[p,y] > 0){
+            
+          log(dens[p, y]) ~ normal(log((density_hat[p, y] + 1e-6) / (theta[p,y] + 1e-6)) - pow(sigma_obs,2)/2, sigma_obs);
+          
+          }
+        }
         
         1 ~ bernoulli(theta[p, y]);
       } else {
@@ -766,9 +795,25 @@ generated quantities {
   for (y in 1 : ny_train) {
     for (p in 1 : np) {
       // ignoring error around length sampling for now
-      dens_pp[p, y] = bernoulli_rng(theta[p, y])
+      // add in poisson toggle here
+      
+      if (use_poisson_link == 1){
+        
+        if (theta[p,y] > 0){
+        
+              dens_pp[p, y] = bernoulli_rng(theta[p, y])
+                      * exp(normal_rng(log(density_hat[p, y] / theta[p,y] + 1e-3) - pow(sigma_obs,2)/2,
+                                       sigma_obs));
+        } else {
+          dens_pp[p, y] = 0;
+        }
+      } else {
+        
+              dens_pp[p, y] = bernoulli_rng(theta[p, y])
                       * exp(normal_rng(log(density_hat[p, y] + 1e-6),
                                        sigma_obs));
+      }
+
     }
   }
   
@@ -811,8 +856,8 @@ generated quantities {
                                         * log(density_proj[p, y] + 1e-6))));
         
         density_obs_proj[p, y] = bernoulli_rng(theta_proj[p, y])
-                                 * exp(normal_rng(log(density_proj[p, y]
-                                                      + 1e-6),
+                                 * exp(normal_rng(log((density_proj[p, y] + 1e-6) / theta_proj[p, y]
+                                                      ),
                                                   sigma_obs));
         // the observed densitieis as opposed to the true densities
       } // close patches 
