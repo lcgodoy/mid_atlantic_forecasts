@@ -79,13 +79,12 @@ for(k in 1:nrow(ctrl_file)){
   # would be more efficient to do this above without having to load in the model 
   if(write_summary==TRUE){
     
-    tmp_model <-  read_rds(file.path(results_path, "stan_model_fit.rds"))
+    tmp_model <-  tryCatch(read_rds(file.path(results_path, "stan_model_fit.rds")))
     # may want to add in rhat metrics later, but those are per parameter
     #   https://mc-stan.org/cmdstanr/articles/cmdstanr.html 
     
-    diagnostic_ls <- c(list(num_chains = chains, num_cores = cores, num_iters = iters, num_warmups = warmups), tmp_model$diagnostic_summary())
-    saveRDS(diagnostic_ls, file = file.path(results_path,"diagnostics.rds"))
-    
+    diagnostic_ls <- tryCatch(c(list(num_chains = chains, num_cores = cores, num_iters = iters, num_warmups = warmups), tmp_model$diagnostic_summary()))
+    tryCatch(saveRDS(diagnostic_ls, file = file.path(results_path,"diagnostics.rds"))    )
     
   } # close summary 
 } # close loop over models
