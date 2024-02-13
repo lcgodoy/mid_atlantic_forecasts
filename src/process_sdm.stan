@@ -441,7 +441,7 @@ data {
   
   real t0;
   
-  real cv;
+ // real cv;
   
   matrix[n_ages, ny_train] f;
   
@@ -481,11 +481,46 @@ data {
   
   array[np, n_lbins, ny_train] int n_at_length; // SUM number of individuals in each length bin, patch, and year; used for age composition only, because the magnitude is determined by sampling effort
   
-  real sigma_obs_cv; // cv of sigma_obs prior
-  
   real h; // steepness
   
   real dcap; // cap on diffusion parameter
+  
+  // pass in all prior values for distributions 
+  // all named as follows: pr (for prior) + parameter name + parameter of probability distribution as required by Stan (e.g., alpha and beta for the beta distribution, mu and sigma for the normal distribution)
+  real pr_init_dep_alpha; 
+  real pr_init_dep_beta; 
+  real pr_beta_obs_mu;
+  real pr_beta_obs_sigma;
+  real pr_beta_obs_int_mu;
+  real pr_beta_obs_int_sigma; 
+  real pr_raw_mu;
+  real pr_raw_sigma;
+  real pr_sigma_r_raw_mu;
+  real pr_sigma_r_raw_sigma;
+  real pr_sigma_obs_mu; 
+  real pr_sigma_obs_sigma; // formerly sigma_obs_cv
+  real pr_log_mean_recruits_mu; 
+  real pr_log_mean_recruits_sigma; 
+  real pr_log_r0_mu; 
+  real pr_log_r0_sigma; 
+  real pr_Topt_mu; 
+  real pr_Topt_sigma; 
+  real pr_width_mu; 
+  real pr_width_sigma; 
+  real pr_beta_t_mu; 
+  real pr_beta_t_sigma; 
+  real pr_beta_rec_mu; 
+  real pr_beta_rec_sigma; 
+  real pr_alpha_alpha; 
+  real pr_alpha_beta;
+  real pr_d_mu;
+  real pr_d_sigma;
+  real pr_p_length_50_sel_sigma; // note that there is no mu prior passed in because it's calculated in the code from length_50_sel_guess and loo 
+  real pr_sel_delta_mu;
+  real pr_sel_delta_sigma; 
+  real pr_theta_d_mu;
+  real pr_theta_d_sigma; 
+  
 }
 transformed data {
   vector[n_ages] maturity_at_age; // vector of probabilities of being mature at each age, currently binary (0/1) and taken as known
@@ -692,39 +727,39 @@ model {
   
   real test;
   
-  init_dep ~ beta(1.5, 3);
+  init_dep ~ beta(pr_init_dep_alpha, pr_init_dep_beta);
   
-  beta_obs ~ normal(0.001, 0.1);
+  beta_obs ~ normal(pr_beta_obs_mu, pr_beta_obs_sigma);
   
-  beta_obs_int ~ normal(-100, 4);
+  beta_obs_int ~ normal(pr_beta_obs_int_mu, pr_beta_obs_int_sigma);
   
-  raw ~ normal(0, 1);
+  raw ~ normal(pr_raw_mu, pr_raw_sigma);
   
-  sigma_r_raw ~ normal(.2, .1);
+  sigma_r_raw ~ normal(pr_sigma_r_raw_mu, pr_sigma_r_raw_sigma);
   
-  sigma_obs ~ normal(0.2, sigma_obs_cv);
+  sigma_obs ~ normal(pr_sigma_obs_mu, pr_sigma_obs_sigma);
   
-  log_mean_recruits ~ normal(7, 5);
+  log_mean_recruits ~ normal(pr_log_mean_recruits_mu, pr_log_mean_recruits_sigma);
   
-  log_r0 ~ normal(15, 5);
+  log_r0 ~ normal(pr_log_r0_mu, pr_log_r0_sigma);
   
-  Topt ~ normal(18, 2);
+  Topt ~ normal(pr_Topt_mu, pr_Topt_sigma);
   
-  width ~ normal(4, 2);
+  width ~ normal(pr_width_mu, pr_width_sigma);
   
-  beta_t ~ normal(0, 2);
+  beta_t ~ normal(pr_beta_t_mu, pr_beta_t_sigma);
   
-  beta_rec ~ normal(0, 2);
+  beta_rec ~ normal(pr_beta_rec_mu, pr_beta_rec_sigma);
   
-  alpha ~ beta(12, 20); // concentrated around 0.4
+  alpha ~ beta(pr_alpha_alpha, pr_alpha_beta); 
   
-  d ~ normal(0.1, 0.1); // diffusion rate as a proportion of total population size within the patch
+  d ~ normal(pr_d_mu, pr_d_sigma); 
   
-  p_length_50_sel ~ normal(length_50_sel_guess / loo, .2);
+  p_length_50_sel ~ normal(length_50_sel_guess / loo, pr_p_length_50_sel_sigma);
   
-  sel_delta ~ normal(2, 4);
+  sel_delta ~ normal(pr_sel_delta_mu, pr_sel_delta_sigma);
   
-  theta_d ~ normal(0.5, .5);
+  theta_d ~ normal(pr_theta_d_mu, pr_theta_d_sigma);
   
   for (y in 2 : ny_train) {
     for (p in 1 : np) {

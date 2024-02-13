@@ -192,7 +192,7 @@ meanpatcharea <- mean(patchdat$patch_area_km2)
 if(make_data_plots==TRUE){
   gg_year_dens <- dat_train_dens %>% 
     mutate(density = mean_dens * meanpatcharea) %>% 
-  ggplot() +
+    ggplot() +
     geom_line(aes(x=year, y=density)) + 
     facet_wrap(~lat_floor, ncol=5) +
     labs(title="Summer flounder fall CPUE", x="Year", y="Density per patch")
@@ -412,13 +412,13 @@ save(
   length_50_sel_guess,
   n_lbins, 
   age_sel,
-bin_mids,
-sel_100=sel_100,
+  bin_mids,
+  sel_100=sel_100,
   age_at_maturity,
   l_at_a_mat,
   wt_at_age,
-patches, 
-years,
-years_proj,
-file=here("processed-data","stan_data_prep.Rdata")
+  patches, 
+  years,
+  years_proj,
+  file=here("processed-data","stan_data_prep.Rdata")
 )

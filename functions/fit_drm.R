@@ -24,9 +24,44 @@ fit_drm <- function(amarel = FALSE,
                     quantiles_calc = c(0.05, 0.5, 0.95),
                     known_f = 0,
                     known_historic_f = 1,
-                    sigma_obs_cv = 0.1,
+                    #          cv = 0.1, # replaced by pr_sigma_obs_sigma, below 
                     h = 0.8,
-                    dcap = 1 / 3) {
+                    dcap = 1 / 3, 
+                    # all priors that Stan needs for parameter estimation 
+                    pr_init_dep_alpha = 1.5,
+                    pr_init_dep_beta = 3,
+                    pr_beta_obs_mu = 0.001,
+                    pr_beta_obs_sigma = 0.1,
+                    pr_beta_obs_int_mu = -100,
+                    pr_beta_obs_int_sigma = 4,
+                    pr_raw_mu = 0,
+                    pr_raw_sigma = 1,
+                    pr_sigma_r_raw_mu = .2,
+                    pr_sigma_r_raw_sigma = .1,
+                    pr_sigma_obs_mu = 0.2, 
+                    pr_sigma_obs_sigma = 0.2, # formerly "cv" / "sigma_obs_cv"
+                    pr_log_mean_recruits_mu = 7,
+                    pr_log_mean_recruits_sigma = 5,
+                    pr_log_r0_mu = 15,
+                    pr_log_r0_sigma = 5,
+                    pr_Topt_mu = 18 ,
+                    pr_Topt_sigma = 2,
+                    pr_width_mu = 4,
+                    pr_width_sigma = 2,
+                    pr_beta_t_mu = 0,
+                    pr_beta_t_sigma = 2,
+                    pr_beta_rec_mu = 0,
+                    pr_beta_rec_sigma = 2,
+                    pr_alpha_alpha = 12, # concentrated around 0.4
+                    pr_alpha_beta = 20, # concentrated around 0.4
+                    pr_d_mu = 0.1, # diffusion rate as a proportion of total population size within the patch
+                    pr_d_sigma = 0.1,
+                    pr_p_length_50_sel_sigma = .2, # note that there is no mu prior for this parameter passed in because it's calculated in the code from length_50_sel_guess and loo 
+                    pr_sel_delta_mu = 2,
+                    pr_sel_delta_sigma = 4,
+                    pr_theta_d_mu = 0.5,
+                    pr_theta_d_sigma = 0.5
+) {
   if (amarel == TRUE) {
     dyn.load('/projects/community/gcc/9.2.0/gc563/lib64/libgfortran.so.5')
     
@@ -82,7 +117,7 @@ fit_drm <- function(amarel = FALSE,
     k = k,
     loo = loo,
     t0 = t0,
-    cv = cv,
+    #    cv = cv,
     length_50_sel_guess = length_50_sel_guess,
     age_sel = age_sel,
     bin_mids = bin_mids,
@@ -104,10 +139,42 @@ fit_drm <- function(amarel = FALSE,
     process_error_toggle = process_error_toggle,
     number_quantiles = number_quantiles,
     quantiles_calc = quantiles_calc,
-    sigma_obs_cv = sigma_obs_cv,
     h = h,
     dcap = dcap,
-    use_poisson_link = use_poisson_link
+    use_poisson_link = use_poisson_link,
+    pr_init_dep_alpha = pr_init_dep_alpha,
+    pr_init_dep_beta = pr_init_dep_beta,
+    pr_beta_obs_mu = pr_beta_obs_mu,
+    pr_beta_obs_sigma = pr_beta_obs_sigma,
+    pr_beta_obs_int_mu = pr_beta_obs_int_mu,
+    pr_beta_obs_int_sigma = pr_beta_obs_int_sigma,
+    pr_raw_mu = pr_raw_mu,
+    pr_raw_sigma = pr_raw_sigma,
+    pr_sigma_r_raw_mu = pr_sigma_r_raw_mu,
+    pr_sigma_r_raw_sigma = pr_sigma_r_raw_sigma,
+    pr_sigma_obs_mu = pr_sigma_obs_mu, 
+    pr_sigma_obs_sigma = pr_sigma_obs_sigma,
+    pr_log_mean_recruits_mu = pr_log_mean_recruits_mu,
+    pr_log_mean_recruits_sigma = pr_log_mean_recruits_sigma,
+    pr_log_r0_mu = pr_log_r0_mu,
+    pr_log_r0_sigma = pr_log_r0_sigma,
+    pr_Topt_mu = pr_Topt_mu ,
+    pr_Topt_sigma = pr_Topt_sigma,
+    pr_width_mu = pr_width_mu,
+    pr_width_sigma = pr_width_sigma,
+    pr_beta_t_mu = pr_beta_t_mu,
+    pr_beta_t_sigma =pr_beta_t_sigma,
+    pr_beta_rec_mu = pr_beta_rec_mu,
+    pr_beta_rec_sigma = pr_beta_rec_sigma,
+    pr_alpha_alpha = pr_alpha_alpha,
+    pr_alpha_beta = pr_alpha_beta,
+    pr_d_mu =pr_d_mu,
+    pr_d_sigma = pr_d_sigma,
+    pr_p_length_50_sel_sigma = pr_p_length_50_sel_sigma,
+    pr_sel_delta_mu = pr_sel_delta_mu,
+    pr_sel_delta_sigma = pr_sel_delta_sigma,
+    pr_theta_d_mu = pr_theta_d_mu,
+    pr_theta_d_sigma = pr_theta_d_sigma
   )
   nums <- 100 * exp(-.2 * (0:(n_ages - 1)))
   
@@ -139,34 +206,34 @@ fit_drm <- function(amarel = FALSE,
         beta_obs_int = jitter(-10, 2)
       ))
   )
-
-stan_model_fit$save_object(file = file.path(results_path,
-                                     "stan_model_fit.rds"))
-
-# fit <- readRDS(file.path(results_path,
-#                          "stan_model_fit.rds"))
-# browser()
-#   
-#   stan_model_fit <- stan(
-#     sample_file = file.path(results_path,paste0(run_name,".csv")),
-#     diagnostic_file = file.path(results_path,paste0(run_name,"_diagnostics.csv")),
-#     file = stan_file,
-#     data = stan_data,
-#     chains = chains,
-#     warmup = warmup,
-#     iter = iter,
-#     cores = cores,
-#     refresh = refresh,
-#     control = list(max_treedepth = 8,
-#                    adapt_delta = 0.95),
-#     init = lapply(1:chains, function(x)
-#       list(
-#         Topt = jitter(12, 4),
-#         log_r0 = jitter(10, 5),
-#         beta_obs = jitter(1e-6, 4),
-#         beta_obs_int = jitter(-10, 2)
-#       ))
-#   )
+  
+  stan_model_fit$save_object(file = file.path(results_path,
+                                              "stan_model_fit.rds"))
+  
+  # fit <- readRDS(file.path(results_path,
+  #                          "stan_model_fit.rds"))
+  # browser()
+  #   
+  #   stan_model_fit <- stan(
+  #     sample_file = file.path(results_path,paste0(run_name,".csv")),
+  #     diagnostic_file = file.path(results_path,paste0(run_name,"_diagnostics.csv")),
+  #     file = stan_file,
+  #     data = stan_data,
+  #     chains = chains,
+  #     warmup = warmup,
+  #     iter = iter,
+  #     cores = cores,
+  #     refresh = refresh,
+  #     control = list(max_treedepth = 8,
+  #                    adapt_delta = 0.95),
+  #     init = lapply(1:chains, function(x)
+  #       list(
+  #         Topt = jitter(12, 4),
+  #         log_r0 = jitter(10, 5),
+  #         beta_obs = jitter(1e-6, 4),
+  #         beta_obs_int = jitter(-10, 2)
+  #       ))
+  #   )
   rm(stan_model_fit)
   # readr::write_rds(stan_model_fit, file = file.path(results_path,
   #                                                 "stan_model_fit.rds"))
