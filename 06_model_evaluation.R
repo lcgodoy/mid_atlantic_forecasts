@@ -39,9 +39,9 @@ calculate_range_edge <- function(patches, weights, q){
     if(p == 1) { # special case when range edge is in the first patch 
       out <- patches[1] + cutoff / weights[1]
     } else {
-    dec <- (cutoff - csum[p-1]) / weights[p] # calculate decimal position into the edge patch -- what proportion of the patch would be occupied, assuming a constant density 
-    out <- patches[p] + dec 
-    return(out) }
+      dec <- (cutoff - csum[p-1]) / weights[p] # calculate decimal position into the edge patch -- what proportion of the patch would be occupied, assuming a constant density 
+      out <- patches[p] + dec 
+      return(out) }
   } else {return(print("Length of patches and weights must be equal!"))}
 }
 
@@ -309,7 +309,54 @@ gg_metrics2 <- dat_forecasts_summ  %>%
 gg_metrics2
 ggsave(gg_metrics2, filename=here("results","bias_v_rmse.png"), width=110, height=60, dpi=600, units="mm", scale=1.5)
 
-# want to plot dat_test_patch, gam_time, and 
+# want to plot dat_test_patch, gam_time, and persistence_dat against the posteriors 
+
+best_models <- c('v0.25','v0.45','v0.61')
+
+points_for_plot <- dat_test_patch %>% 
+  mutate(id = 'Observed')%>% rename(value_tmp = value) %>% 
+  bind_rows(gam_time %>% mutate(id = 'GAM') )  %>% 
+  bind_rows(persistence_dat %>% pivot_longer(cols=c('warm_edge','cold_edge','abund','centroid'), values_to='value_tmp', names_to='feature') %>% mutate(id='Persistence')) %>% 
+  filter(feature %in% c('warm_edge','cold_edge','centroid')) %>% 
+  mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature))
+
+for(k in best_models){
+  results_path <- file.path(paste0('~/github/mid_atlantic_forecasts/results/',k))
+  tmp_edges <- read_rds(file.path(results_path, "range_quantiles_proj.rds")) %>% 
+    mutate(year = year + min(years_proj) - 1,
+           range_quantiles_proj = range_quantiles_proj + min(patches) - 1) %>% 
+    filter(range_quantiles_proj < Inf,
+           year < 2017)
+  tmp_centroids <- read_rds(file.path(results_path, "centroid_proj.rds"))%>% 
+    mutate(year = year + min(years_proj) - 1) %>% 
+    filter(year < 2017)
+  
+  gg_range_time_drm <- ggplot() +
+    stat_lineribbon(data = tmp_edges[tmp_edges$quantile==0.05,], aes(x=year, y=range_quantiles_proj))+ 
+    stat_lineribbon(data = tmp_edges[tmp_edges$quantile==0.95,], aes(x=year, y=range_quantiles_proj))+ 
+    stat_lineribbon(data = tmp_centroids, aes(x=year, y=centroid_proj))+ 
+    geom_point(data=points_for_plot %>% filter(id == "Observed") %>% rename("Feature" = feature), aes(x=year, y=value_tmp, shape=Feature), color="red", size=2) + 
+    geom_line(data=points_for_plot %>% filter(id == "Observed")%>% rename("Feature" = feature), aes(x=year, y=value_tmp, group=Feature), color="red") +
+    scale_fill_brewer(name = "Credible Interval") +
+    scale_x_continuous(breaks =seq(2007, 2016, 1)) + 
+    scale_y_continuous(breaks = seq(35, 44, 1), labels =  seq(35, 44, 1), limits=c(34, 44.5)) +
+    labs(x="Year", y="Latitude", title = paste0("DRM ",k)) + 
+    theme_bw()
+  ggsave(gg_range_time_drm, filename=paste0(here("results"),"/range_time_",k,".png"), dpi=600, units="mm", width=130, height=75)
+}
+
+gg_range_time <-  ggplot() +
+  geom_point(data=points_for_plot %>% rename("Feature" = feature), aes(x=year, y=value_tmp, color = id, shape=Feature), size=2) + 
+  geom_line(data=points_for_plot %>% rename("Feature" = feature), aes(x=year, y=value_tmp, color=id, group = interaction(id, Feature))) +
+  scale_x_continuous(breaks =seq(2007, 2016, 1)) + 
+  scale_y_continuous(breaks = seq(35, 44, 1), labels =  seq(35, 44, 1), limits=c(34, 44.5)) +
+  scale_color_manual(values = c('blue','red','green')) +
+  labs(x="Year", y="Latitude", title = "Model Comparisons") + 
+  theme_bw() +
+  theme(legend.title = element_blank(),
+        legend.position = "bottom") +
+  guides(color=guide_legend("Feature"), shape = "none") 
+ggsave(gg_range_time, filename=here("results","range_time.png"), dpi=600, units="mm", width=115, height=75)
 
 #     gg_length <- n_at_length_hat %>% 
 #       ggplot(aes(length, plength)) +
