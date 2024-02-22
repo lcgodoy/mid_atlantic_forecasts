@@ -22,13 +22,15 @@ load(here("processed-data","stan_data_prep.Rdata"))
 quantiles_calc <- c(0.05, 0.5, 0.95)
 
 # make user decisions 
-divergence_cutoff <- 0.01
+divergence_cutoff <- 0.05
+chains_cutoff <- 3 
 generate_exploratory_plots <- FALSE
 
 # identify models that pass convergence checks 
 summarydat <- convergence_checks %>% 
   left_join(ctrl_file) %>% 
-  filter(mean_divergences < divergence_cutoff)
+  filter(mean_divergences <= divergence_cutoff, 
+         successful_chains >= chains_cutoff)
 
 # write a function to calculate patch edge positions 
 calculate_range_edge <- function(patches, weights, q){
@@ -253,6 +255,9 @@ for(i in 1:nrow(summarydat)){
 }
 write_csv(drm_out, file=here("processed-data","posteriors_for_model_evaluation.csv"))
 
+drm_out <- drm_out %>% 
+  filter(id %in% summarydat$id)
+
 drm_summary <- drm_out %>% 
   filter(!is.na(resid)) %>% 
   group_by(year, feature, id) %>% 
@@ -270,6 +275,8 @@ dat_forecasts_summ <- dat_forecasts %>%
   summarise(RMSE = sqrt(mean(resid_sq)), 
             Bias = mean(resid)) %>% 
   pivot_longer(cols=c(RMSE, Bias), values_to="value", names_to="metric") 
+
+write_csv(dat_forecasts_summ, file = here("processed-data","model_comparison_summary.csv"))
 
 #####
 # plots 
@@ -309,9 +316,70 @@ gg_metrics2 <- dat_forecasts_summ  %>%
 gg_metrics2
 ggsave(gg_metrics2, filename=here("results","bias_v_rmse.png"), width=110, height=60, dpi=600, units="mm", scale=1.5)
 
+# still too much to look at... need to trim down more 
+
+# hacky way to get the best models 
+best_drms <- dat_forecasts_summ %>% 
+  filter(metric=='RMSE', !id %in% c('GAM','Persistence')) %>% 
+  group_by(id) %>% 
+  mutate(mean_value = mean(value)) %>% 
+  filter(mean_value < 0.75)
+length(unique(best_drms$id))
+
+gg_metrics3 <- dat_forecasts_summ  %>% 
+  filter(id %in% c(unique(best_drms$id), 'GAM','Persistence')) %>% 
+  mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature),
+         type = ifelse(str_detect(id, "0."),"DRM", id),
+         metric = factor(metric, levels = c("RMSE","Bias")),
+         id = gsub("v0.", "v", id))  %>%  
+  pivot_wider(names_from = metric, values_from = value) %>% 
+  ggplot(aes(x=RMSE, y=Bias)) + 
+  geom_point(aes(color=type, fill=type),size=1) +
+  geom_text_repel(aes(label=id), hjust = 1, max.overlaps = Inf) +
+  scale_color_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
+  scale_fill_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
+  theme_bw() + 
+  facet_wrap(~feature) +
+  theme(legend.position = "bottom",
+        legend.title=element_blank())
+gg_metrics3
+ggsave(gg_metrics3, filename=here("results","bias_v_rmse.png"), width=110, height=60, dpi=600, units="mm", scale=1.5)
+
+ctrl_dat <- ctrl_file %>% 
+  select(-id, -do_dirichlet, -exp_yn, -known_historic_f, -description) 
+
+ctrl_dat <- cbind(id = ctrl_file$id, data.frame(ifelse(ctrl_dat == 0, "No", "Yes")))  # hacky way to convert 0s and 1s into yeses and nos 
+
+drms_without_t <- ctrl_file %>% 
+  mutate(tmp = T_dep_movement + T_dep_recruitment + T_dep_mortality) %>% 
+  filter(tmp == 0) %>% 
+  pull(id)
+
+tbl_out <- ctrl_dat %>% 
+  filter(id %in% best_drms$id) %>% 
+  pivot_longer(cols = c('T_dep_movement','T_dep_mortality','T_dep_recruitment'), values_to='value',names_to='formulation') %>% 
+  group_by(id) %>% 
+  mutate(T_effect = case_when(
+    value=='Yes' ~ formulation,
+    id %in% drms_without_t ~ 'None'
+    )) %>% 
+  select(-value, -formulation) %>% 
+  group_by(id) %>% 
+  fill(T_effect, .direction="updown") %>% 
+  distinct() %>% 
+  mutate(T_effect = case_match(T_effect, 
+    'T_dep_recruitment' ~ 'Recruitment',
+    'T_dep_mortality' ~ 'Mortality',
+    'T_dep_movement' ~ 'Movement',
+    'None' ~ 'None'
+  ))
+  
+colnames(tbl_out) <- c("ID","Fit to Length", "Spawner-Recruit Relationship","Process Error", "Known F","Temperature Effect")
+
+write_csv(tbl_out, file = here("results","best_drm_table.csv"))
+
 # want to plot dat_test_patch, gam_time, and persistence_dat against the posteriors 
 
-best_models <- c('v0.25','v0.45','v0.61')
 
 points_for_plot <- dat_test_patch %>% 
   mutate(id = 'Observed')%>% rename(value_tmp = value) %>% 
@@ -320,7 +388,7 @@ points_for_plot <- dat_test_patch %>%
   filter(feature %in% c('warm_edge','cold_edge','centroid')) %>% 
   mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature))
 
-for(k in best_models){
+for(k in best_drms){
   results_path <- file.path(paste0('~/github/mid_atlantic_forecasts/results/',k))
   tmp_edges <- read_rds(file.path(results_path, "range_quantiles_proj.rds")) %>% 
     mutate(year = year + min(years_proj) - 1,
