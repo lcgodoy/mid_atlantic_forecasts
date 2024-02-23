@@ -3,6 +3,7 @@
 ###############
 
 # much of this script is copied from prep_summer_flounder.R; revisit it if that script is changed! 
+# this takes a few hours to run because it loops over many models and loads the full posteriors to calculate summary statistics 
 
 # load packages 
 set.seed(42)
@@ -61,6 +62,7 @@ dat_test_patch <- dat_test_dens %>%
          abund_lr = log(abund / lag(abund))) %>% 
   pivot_longer(cols=c(warm_edge:abund_lr), names_to="feature", values_to="value") 
 
+write_csv(dat_test_patch, file=here("processed-data","dat_test_patch.csv"))
 ###############
 # FIT SDMS FOR COMPARISON
 ###############
@@ -185,6 +187,14 @@ persistence_summary <- persistence_dat %>%
          .keep = "unused", # drop all the columns used in calculations 
          id = "Persistence") 
 
+points_for_plot <- dat_test_patch %>% 
+  mutate(id = 'Observed')%>% rename(value_tmp = value) %>% 
+  bind_rows(gam_time %>% mutate(id = 'GAM') )  %>% 
+  bind_rows(persistence_dat %>% pivot_longer(cols=c('warm_edge','cold_edge','abund','centroid'), values_to='value_tmp', names_to='feature') %>% mutate(id='Persistence')) %>% 
+  filter(feature %in% c('warm_edge','cold_edge','centroid')) %>% 
+  mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature)) 
+write_csv(points_for_plot, file=here("processed-data","points_for_plot.csv"))
+
 ###############
 # SUMMARIZE DRM OUTPUTS
 ###############
@@ -278,192 +288,3 @@ dat_forecasts_summ <- dat_forecasts %>%
 
 write_csv(dat_forecasts_summ, file = here("processed-data","model_comparison_summary.csv"))
 
-#####
-# plots 
-#####
-
-gg_metrics <- dat_forecasts_summ  %>% 
-  mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature),
-         metric = case_match(metric, "rmse" ~ "RMSE", "bias" ~ "Bias", .default=metric), 
-         type = ifelse(str_detect(id, "0."),"DRM", id),
-         metric = factor(metric, levels = c("RMSE","Bias")))  %>%  
-  ggplot(aes(x=feature, y=value)) + 
-  geom_point(aes(color=type, fill=type),size=1) +
-  geom_text_repel(aes(label=id), hjust = 1, max.overlaps = Inf) +
-  scale_color_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
-  scale_fill_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
-  theme_bw() + 
-  facet_wrap(~metric, scales="free_y") +
-  labs(x="Feature", y="Metric") + 
-  theme(legend.position = "bottom")
-gg_metrics
-
-gg_metrics2 <- dat_forecasts_summ  %>% 
-  mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature),
-         type = ifelse(str_detect(id, "0."),"DRM", id),
-         metric = factor(metric, levels = c("RMSE","Bias")),
-         id = gsub("v0.", "v", id))  %>%  
-  pivot_wider(names_from = metric, values_from = value) %>% 
-  ggplot(aes(x=RMSE, y=Bias)) + 
-  geom_point(aes(color=type, fill=type),size=1) +
-  geom_text_repel(aes(label=id), hjust = 1, max.overlaps = Inf) +
-  scale_color_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
-  scale_fill_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
-  theme_bw() + 
-  facet_wrap(~feature) +
-  theme(legend.position = "bottom",
-        legend.title=element_blank())
-gg_metrics2
-ggsave(gg_metrics2, filename=here("results","bias_v_rmse.png"), width=110, height=60, dpi=600, units="mm", scale=1.5)
-
-# still too much to look at... need to trim down more 
-
-# hacky way to get the best models 
-best_drms <- dat_forecasts_summ %>% 
-  filter(metric=='RMSE', !id %in% c('GAM','Persistence')) %>% 
-  group_by(id) %>% 
-  mutate(mean_value = mean(value)) %>% 
-  filter(mean_value < 0.75)
-length(unique(best_drms$id))
-
-gg_metrics3 <- dat_forecasts_summ  %>% 
-  filter(id %in% c(unique(best_drms$id), 'GAM','Persistence')) %>% 
-  mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature),
-         type = ifelse(str_detect(id, "0."),"DRM", id),
-         metric = factor(metric, levels = c("RMSE","Bias")),
-         id = gsub("v0.", "v", id))  %>%  
-  pivot_wider(names_from = metric, values_from = value) %>% 
-  ggplot(aes(x=RMSE, y=Bias)) + 
-  geom_point(aes(color=type, fill=type),size=1) +
-  geom_text_repel(aes(label=id), hjust = 1, max.overlaps = Inf) +
-  scale_color_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
-  scale_fill_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
-  theme_bw() + 
-  facet_wrap(~feature) +
-  theme(legend.position = "bottom",
-        legend.title=element_blank())
-gg_metrics3
-ggsave(gg_metrics3, filename=here("results","bias_v_rmse.png"), width=110, height=60, dpi=600, units="mm", scale=1.5)
-
-ctrl_dat <- ctrl_file %>% 
-  select(-id, -do_dirichlet, -exp_yn, -known_historic_f, -description) 
-
-ctrl_dat <- cbind(id = ctrl_file$id, data.frame(ifelse(ctrl_dat == 0, "No", "Yes")))  # hacky way to convert 0s and 1s into yeses and nos 
-
-drms_without_t <- ctrl_file %>% 
-  mutate(tmp = T_dep_movement + T_dep_recruitment + T_dep_mortality) %>% 
-  filter(tmp == 0) %>% 
-  pull(id)
-
-tbl_out <- ctrl_dat %>% 
-  filter(id %in% best_drms$id) %>% 
-  pivot_longer(cols = c('T_dep_movement','T_dep_mortality','T_dep_recruitment'), values_to='value',names_to='formulation') %>% 
-  group_by(id) %>% 
-  mutate(T_effect = case_when(
-    value=='Yes' ~ formulation,
-    id %in% drms_without_t ~ 'None'
-    )) %>% 
-  select(-value, -formulation) %>% 
-  group_by(id) %>% 
-  fill(T_effect, .direction="updown") %>% 
-  distinct() %>% 
-  mutate(T_effect = case_match(T_effect, 
-    'T_dep_recruitment' ~ 'Recruitment',
-    'T_dep_mortality' ~ 'Mortality',
-    'T_dep_movement' ~ 'Movement',
-    'None' ~ 'None'
-  ))
-  
-colnames(tbl_out) <- c("ID","Fit to Length", "Spawner-Recruit Relationship","Process Error", "Known F","Temperature Effect")
-
-write_csv(tbl_out, file = here("results","best_drm_table.csv"))
-
-# want to plot dat_test_patch, gam_time, and persistence_dat against the posteriors 
-
-
-points_for_plot <- dat_test_patch %>% 
-  mutate(id = 'Observed')%>% rename(value_tmp = value) %>% 
-  bind_rows(gam_time %>% mutate(id = 'GAM') )  %>% 
-  bind_rows(persistence_dat %>% pivot_longer(cols=c('warm_edge','cold_edge','abund','centroid'), values_to='value_tmp', names_to='feature') %>% mutate(id='Persistence')) %>% 
-  filter(feature %in% c('warm_edge','cold_edge','centroid')) %>% 
-  mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature))
-
-for(k in best_drms){
-  results_path <- file.path(paste0('~/github/mid_atlantic_forecasts/results/',k))
-  tmp_edges <- read_rds(file.path(results_path, "range_quantiles_proj.rds")) %>% 
-    mutate(year = year + min(years_proj) - 1,
-           range_quantiles_proj = range_quantiles_proj + min(patches) - 1) %>% 
-    filter(range_quantiles_proj < Inf,
-           year < 2017)
-  tmp_centroids <- read_rds(file.path(results_path, "centroid_proj.rds"))%>% 
-    mutate(year = year + min(years_proj) - 1) %>% 
-    filter(year < 2017)
-  
-  gg_range_time_drm <- ggplot() +
-    stat_lineribbon(data = tmp_edges[tmp_edges$quantile==0.05,], aes(x=year, y=range_quantiles_proj))+ 
-    stat_lineribbon(data = tmp_edges[tmp_edges$quantile==0.95,], aes(x=year, y=range_quantiles_proj))+ 
-    stat_lineribbon(data = tmp_centroids, aes(x=year, y=centroid_proj))+ 
-    geom_point(data=points_for_plot %>% filter(id == "Observed") %>% rename("Feature" = feature), aes(x=year, y=value_tmp, shape=Feature), color="red", size=2) + 
-    geom_line(data=points_for_plot %>% filter(id == "Observed")%>% rename("Feature" = feature), aes(x=year, y=value_tmp, group=Feature), color="red") +
-    scale_fill_brewer(name = "Credible Interval") +
-    scale_x_continuous(breaks =seq(2007, 2016, 1)) + 
-    scale_y_continuous(breaks = seq(35, 44, 1), labels =  seq(35, 44, 1), limits=c(34, 44.5)) +
-    labs(x="Year", y="Latitude", title = paste0("DRM ",k)) + 
-    theme_bw()
-  ggsave(gg_range_time_drm, filename=paste0(here("results"),"/range_time_",k,".png"), dpi=600, units="mm", width=130, height=75)
-}
-
-gg_range_time <-  ggplot() +
-  geom_point(data=points_for_plot %>% rename("Feature" = feature), aes(x=year, y=value_tmp, color = id, shape=Feature), size=2) + 
-  geom_line(data=points_for_plot %>% rename("Feature" = feature), aes(x=year, y=value_tmp, color=id, group = interaction(id, Feature))) +
-  scale_x_continuous(breaks =seq(2007, 2016, 1)) + 
-  scale_y_continuous(breaks = seq(35, 44, 1), labels =  seq(35, 44, 1), limits=c(34, 44.5)) +
-  scale_color_manual(values = c('blue','red','green')) +
-  labs(x="Year", y="Latitude", title = "Model Comparisons") + 
-  theme_bw() +
-  theme(legend.title = element_blank(),
-        legend.position = "bottom") +
-  guides(color=guide_legend("Feature"), shape = "none") 
-ggsave(gg_range_time, filename=here("results","range_time.png"), dpi=600, units="mm", width=115, height=75)
-
-#     gg_length <- n_at_length_hat %>% 
-#       ggplot(aes(length, plength)) +
-#       stat_lineribbon(size = .1) +
-#       geom_point(data = n_p_l_y, aes(length, plength), color = "red", alpha = 0.25) +
-#       facet_grid(patch ~ year, scales = "free_y") + 
-#       scale_x_continuous(limits = c(0, 50)) # generates warnings because of the close-to-zero probabilities at larger lengths
-
-abund_p_y_proj <-  dat_test_dens %>%
-  mutate(abundance = mean_dens * meanpatcharea)
-
-gg_observed_abundance_tile <- abund_p_y_proj %>%
-  mutate(Year = (year + min(years_proj) - 1), Latitude = (patch + min(patches) - 1), Abundance=abundance) %>%
-  ggplot(aes(x=Year, y=Latitude, fill=Abundance)) +
-  geom_tile() +
-  theme_bw() +
-  scale_x_continuous(breaks=seq(min(years_proj), max(years_proj), 1)) +
-  scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
-  scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
-  labs(title="Observed")
-
-gg_real <- dat_test_patch %>% 
-  filter(feature %in% c('centroid','cold_edge','warm_edge')) %>% 
-  ggplot(aes(x=year, y=value )) + 
-  geom_line() +
-  geom_point() +
-  theme_bw() + 
-  labs(x="Year", y="Latitude") + 
-  facet_wrap(~feature, ncol=1)
-gg_real
-
-gg_real_plus <- 
-  
-  gg_bias <- dat_forecasts %>% 
-  ggplot(aes(x=year, y=resid,color=model_name, fill=model_name, shape = model_name )) + 
-  geom_line() +
-  geom_point() +
-  theme_bw() + 
-  theme(legend.position = "bottom") +
-  labs(x="Year", y="Residuals (° lat)") + 
-  facet_wrap(~feature)
-gg_bias
