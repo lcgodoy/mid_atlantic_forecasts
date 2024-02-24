@@ -5,6 +5,7 @@ library(here)
 # packages for nice plots
 library(tidytext)
 library(ggrepel)
+library(ggh4x)
 # data
 dat <- read_csv(here("processed-data","flounder_catch_at_length_fall_training.csv"))
 dat_test <- read_csv(here("processed-data","flounder_catch_at_length_fall_testing.csv"))
@@ -17,6 +18,9 @@ dat_test_patch <- read_csv(file=here("processed-data","dat_test_patch.csv"))
 points_for_plot <- read_csv(file=here("processed-data","points_for_plot.csv"))
 
 drm_outputs_available_locally <- FALSE
+
+if(drm_outputs_available_locally){
+  drm_out <- read_csv(here("processed-data","posteriors_for_model_evaluation.csv")) }
 ############
 # calculate all the statistics reported in-text
 ############
@@ -48,6 +52,16 @@ chains_cutoff <- 3
 nrow(convergence_checks %>% 
        filter(mean_divergences <= divergence_cutoff, 
               successful_chains >= chains_cutoff))
+
+# did summer flounder shift north? 
+lm_dat <- points_for_plot %>% 
+  filter(id == 'Observed')
+summary(lm(value_tmp ~ year, data = lm_dat %>% 
+             filter(feature == 'Centroid')))
+summary(lm(value_tmp ~ year, data = lm_dat %>% 
+             filter(feature == 'Warm Edge')))
+summary(lm(value_tmp ~ year, data = lm_dat %>% 
+             filter(feature == 'Cold Edge')))
 
 ############
 # make figures
@@ -213,22 +227,23 @@ dat_evil_plot <- dat_forecasts_summ  %>%
          type = ifelse(str_detect(id, "0."),"DRM", id),
          id = gsub("v0.", "v", id))
 
-gg_metrics4 <- dat %>%  
+gg_mod_compare <- dat_evil_plot %>%  
   mutate(
     metric = factor(metric, levels = c("RMSE","Bias")),
     id = reorder_within(id, value, list(metric, feature))) %>%  
   ggplot( )+
-  geom_point(aes(id, y=value)) + 
-  geom_hline(yintercept=0) + 
+  geom_point(aes(id, y=value, shape = type)) + 
+  geom_hline(yintercept=0, linetype="dashed") + 
   coord_flip() + 
   scale_x_reordered() +
   scale_y_continuous(expand = c(0,0)) +
   theme_bw() + 
   facet_grid(feature ~ metric, scales="free", axes="all_y", axis.labels = "all_y") +
   theme(axis.title.x = element_blank(), 
-        axis.title.y = element_blank()) +
-  NULL
-gg_metrics4
+        axis.title.y = element_blank(),
+        legend.position = "none") +
+  ggh4x::facet_nested_wrap(~metric+feature, scales = "free") 
+ggsave(gg_mod_compare, filename=here("results","bias_v_rmse.png"), width=110, height=80, dpi=600, units="mm", scale=1.5)
 
 ctrl_dat <- ctrl_file %>% 
   select(-id, -do_dirichlet, -exp_yn, -known_historic_f, -description) 
@@ -292,18 +307,18 @@ if(drm_outputs_available_locally == TRUE) {
   } 
 }
 
-gg_range_time <-  ggplot() +
-  geom_point(data=points_for_plot %>% rename("Feature" = feature), aes(x=year, y=value_tmp, color = id, shape=Feature), size=2) + 
-  geom_line(data=points_for_plot %>% rename("Feature" = feature), aes(x=year, y=value_tmp, color=id, group = interaction(id, Feature))) +
-  scale_x_continuous(breaks =seq(2007, 2016, 1)) + 
-  scale_y_continuous(breaks = seq(35, 44, 1), labels =  seq(35, 44, 1), limits=c(34, 44.5)) +
-  scale_color_manual(values = c('blue','red','green')) +
-  labs(x="Year", y="Latitude", title = "Model Comparisons") + 
-  theme_bw() +
-  theme(legend.title = element_blank(),
-        legend.position = "bottom") +
-  guides(color=guide_legend("Feature"), shape = "none") 
-ggsave(gg_range_time, filename=here("results","range_time.png"), dpi=600, units="mm", width=115, height=75)
+# gg_range_time <-  ggplot() +
+#   geom_point(data=points_for_plot %>% rename("Feature" = feature), aes(x=year, y=value_tmp, color = id, shape=Feature), size=2) + 
+#   geom_line(data=points_for_plot %>% rename("Feature" = feature), aes(x=year, y=value_tmp, color=id, group = interaction(id, Feature))) +
+#   scale_x_continuous(breaks =seq(2007, 2016, 1)) + 
+#   scale_y_continuous(breaks = seq(35, 44, 1), labels =  seq(35, 44, 1), limits=c(34, 44.5)) +
+#   scale_color_manual(values = c('blue','red','green')) +
+#   labs(x="Year", y="Latitude", title = "Model Comparisons") + 
+#   theme_bw() +
+#   theme(legend.title = element_blank(),
+#         legend.position = "bottom") +
+#   guides(color=guide_legend("Feature"), shape = "none") 
+# ggsave(gg_range_time, filename=here("results","range_time.png"), dpi=600, units="mm", width=115, height=75)
 
 #     gg_length <- n_at_length_hat %>% 
 #       ggplot(aes(length, plength)) +
@@ -325,15 +340,15 @@ gg_observed_abundance_tile <- abund_p_y_proj %>%
   scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
   labs(title="Observed")
 
-gg_real <- dat_test_patch %>% 
-  filter(feature %in% c('centroid','cold_edge','warm_edge')) %>% 
-  ggplot(aes(x=year, y=value )) + 
-  geom_line() +
-  geom_point() +
-  theme_bw() + 
-  labs(x="Year", y="Latitude") + 
-  facet_wrap(~feature, ncol=1)
-gg_real
+# gg_real <- dat_test_patch %>% 
+#   filter(feature %in% c('centroid','cold_edge','warm_edge')) %>% 
+#   ggplot(aes(x=year, y=value )) + 
+#   geom_line() +
+#   geom_point() +
+#   theme_bw() + 
+#   labs(x="Year", y="Latitude") + 
+#   facet_wrap(~feature, ncol=1)
+# gg_real
 
 # gg_bias <- dat_forecasts %>% 
 #   ggplot(aes(x=year, y=resid,color=model_name, fill=model_name, shape = model_name )) + 
