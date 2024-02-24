@@ -128,11 +128,14 @@ predstt[is.na(predstt)] = 0 # is this correct?
 
 spdata_proj$predstt <- predstt
 
-# calculate residuals by feature (centroid, edges) of forecast 
-gam_summary <- spdata_proj %>% 
+gam_out <- spdata_proj %>% 
   mutate(lat_floor = floor(lat)) %>% 
   group_by(lat_floor, year) %>% 
-  summarise(dens_pred = mean(exp(predstt))) %>% # aggregate to patch scale for comparison to DRM 
+  summarise(dens_pred = mean(exp(predstt)))# aggregate to patch scale for comparison to DRM 
+write_csv(gam_out, file = here("processed-data","gam_abundance_time.csv"))
+
+# calculate residuals by feature (centroid, edges) of forecast 
+gam_summary <- gam_out %>% 
   group_by(year) %>% # calculate summary stats 
   summarise(
     warm_edge = calculate_range_edge(patches=lat_floor, weights=dens_pred, q=0.05),
