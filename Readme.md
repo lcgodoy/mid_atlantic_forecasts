@@ -2,7 +2,7 @@
 
 ## Alexa L. Fredston,* Daniel Ovando,* Jude Kong, Brandon Muffley, James T. Thorson, Malin L. Pinsky
 
-* *Co-first authors*
+\* *Co-first authors*
   
 ### Guide to project code
 
