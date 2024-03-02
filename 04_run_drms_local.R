@@ -22,18 +22,18 @@ sapply(funs, function(x)
 
 # which range edges should be calculated?
 quantiles_calc <- c(0.05, 0.5, 0.95)
-ctrl_file <- read_csv("control_file.csv") |> 
-  slice(1:2)
-# ctrl_file <- read_csv("control_file.csv") %>% 
+ctrl_file <- read_csv("control_file.csv") 
+# ctrl_file <- read_csv("control_file.csv") %>%
 #   filter(eval_l_comps==0,
 #          spawner_recruit_relationship==1,
 #          process_error_toggle==1,
 #          known_f==1
 #          )
 fit_drms <- TRUE
-make_plots <- TRUE
-iters <- 2000
-warmups <- 1000
+make_plots <- FALSE
+write_summary <- TRUE
+iters <- 5000
+warmups <- 2000
 chains <- 4
 cores <- 4
 
@@ -44,11 +44,11 @@ for(k in 1:nrow(ctrl_file)){
   
   # turn off if you just want to load already-fitted models and analyze them
   
-  if (fit_drms){
+  if (fit_drms==TRUE){
     drm_fits <-  ctrl_file %>%
       filter(id == i)
     
-    drm_fits$fits <- list(fit_drm(
+    drm_fits$fits <- list(tryCatch(fit_drm(
       amarel = FALSE,
       create_dir = TRUE,
       run_name = drm_fits$id,
@@ -70,60 +70,70 @@ for(k in 1:nrow(ctrl_file)){
       run_forecast = 1,
       quantiles_calc = quantiles_calc, 
     )
-    )
+    ) 
+    )# as currently written this just adds a column to drm_fits that says "all done". the column `fits` used to contain the model object itself 
     
     
   } # close fit_drms 
   
+  # would be more efficient to do this above without having to load in the model 
+  if(write_summary==TRUE){
+    
+    tmp_model <-  tryCatch(read_rds(file.path(results_path, "stan_model_fit.rds")))
+    # may want to add in rhat metrics later, but those are per parameter
+    #   https://mc-stan.org/cmdstanr/articles/cmdstanr.html 
+    
+    diagnostic_ls <- tryCatch(c(list(num_chains = chains, num_cores = cores, num_iters = iters, num_warmups = warmups), tmp_model$diagnostic_summary()))
+    tryCatch(saveRDS(diagnostic_ls, file = file.path(results_path,"diagnostics.rds"))    )
+    
+  } # close summary 
 } # close loop over models
-  
-  process_stanfit <- function(run_name){
-    
-    results_path <- here::here("results", run_name)
-    
-    tmp_model <-  read_rds(file.path(results_path, "stan_model_fit.rds"))
-    
-    
-    
-    #### insert things to do  ###
-    # tidybayes is the easiest way to get things out of a cmdstan object
-    out <- list()
-    out$diagnostics <- tmp_model$diagnostic_summary()
-    
-    out$n_at_age_hat <- tidybayes::gather_draws(tmp_model, n_at_age_hat[year,patch, age],n = 100)
-    
-    rm(tmp_model)
-    
-    gc()
-    
-    return(out)
-  }
-  
-  drm_fits <- ctrl_file %>%
-    mutate(fits = map(id, process_stanfit, .progress = TRUE))
+# process_stanfit <- function(run_name){
+#   
+#   results_path <- here::here("results", run_name)
+#   
+#   tmp_model <-  read_rds(file.path(results_path, "stan_model_fit.rds"))
+#   
+#   
+#   
+#   #### insert things to do  ###
+#   # tidybayes is the easiest way to get things out of a cmdstan object
+#   out <- list()
+#   out$diagnostics <- tmp_model$diagnostic_summary()
+#   
+#   out$n_at_age_hat <- tidybayes::gather_draws(tmp_model, n_at_age_hat[year,patch, age],n = 100)
+#   
+#   rm(tmp_model)
+#   
+#   gc()
+#   
+#   return(out)
+# }
+# 
+# drm_fits <- ctrl_file %>%
+#   mutate(fits = map(id, process_stanfit, .progress = TRUE))
+# 
+# drm_fits$fits[[1]]$diagnostics
 
-  drm_fits$fits[[1]]$diagnostics
- 
 
 # load results and do something
-  
+
+# diagnostic_fit <- drm_fits$fits[[which(drm_fits$id == i)]]
+# rstan::check_hmc_diagnostics(tmp_model)
+# 
+# num_divergent <- get_num_divergent(tmp_model)
+# num_iters <- length(get_divergent_iterations(diagnostic_fit))
+# num_max_treedepth <- get_num_max_treedepth(diagnostic_fit)
+# bfmi <- get_bfmi(diagnostic_fit)
+# rhat <- rstan::Rhat(diagnostic_fit)
+#  bulk_ess <- rstan::ess_bulk(diagnostic_fit)
+# diagnostic_ls <- list(num_divergent=num_divergent, num_iters=num_iters, num_max_treedepth=num_max_treedepth, bfmi=bfmi)
+# capture.output(diagnostic_ls, file = file.path(results_path,"diagnostics.txt"))
+
+# load results and make plots
+
 #   if(make_plots==TRUE){
 #     # process results ---------------------------------------------------------
-#     
-#     diagnostic_fit <- drm_fits$fits[[which(drm_fits$id == i)]]
-#     
-#     rstan::check_hmc_diagnostics(diagnostic_fit)
-#     
-#     num_divergent <- get_num_divergent(diagnostic_fit)
-#     num_iters <- length(get_divergent_iterations(diagnostic_fit))
-#     num_max_treedepth <- get_num_max_treedepth(diagnostic_fit)
-#     bfmi <- get_bfmi(diagnostic_fit)
-#    # rhat <- rstan::Rhat(diagnostic_fit)
-#   #  bulk_ess <- rstan::ess_bulk(diagnostic_fit)
-#     
-#     diagnostic_ls <- list(num_divergent=num_divergent, num_iters=num_iters, num_max_treedepth=num_max_treedepth, bfmi=bfmi)
-#     
-#     capture.output(diagnostic_ls, file = file.path(results_path,"diagnostics.txt"))
 #     
 #     load(here("processed-data","stan_data_prep.Rdata"))
 #     

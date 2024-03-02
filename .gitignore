@@ -1,3 +1,10 @@
+# ignore *everything*
+*
+!/**/
+# and then this 'unignores' anything with an extension
+!*.*
+*.rds
+*.pdf
 .Rproj.user
 .Rhistory
 .RData
@@ -15,6 +22,6 @@ src/*.rds
 flounderfits.Rdata
 results/*.rds
 **/results/**/*.rds
-**/results/**/*.csv
+#**/results/**/*.csv
 **/results/**/*.txt
 pinskylab-*/*

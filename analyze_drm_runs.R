@@ -2,7 +2,6 @@
 set.seed(42)
 library(tidyverse)
 library(tidybayes)
-library(Cairo)
 library(here)
 library(magrittr)
 library(rstan)
@@ -11,7 +10,7 @@ library(rstanarm)
 
 rstan_options(javascript=FALSE, auto_write =TRUE)
 load(here("processed-data","stan_data_prep.Rdata"))
-load(here())
+stan_model_fit <- read_rds(here("results","v0.1","stan_model_fit.rds"))
 
 # a = rstan::extract(stan_model_fit, "theta_d")
 # write_rds(stan_model_fit,"sigh.rds")
