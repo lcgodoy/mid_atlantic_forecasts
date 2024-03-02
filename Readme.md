@@ -1,8 +1,12 @@
-# Operational dynamic range models for near-term forecasts of species on the move
+# Dynamic range models for near-term forecasting of a marine species on the move
 
-## Alexa L. Fredston, Daniel Ovando, Andrew Allyn, \\James T. Thorson, Malin L. Pinsky
+## Alexa L. Fredston,* Daniel Ovando,* Jude Kong, Brandon Muffley, James T. Thorson, Malin L. Pinsky
 
+* *Co-first authors*
+  
 ### Guide to project code
+
+You are welcome to explore and run any code here! For questions please open an Issue here on GitHub. If you reuse or repurpose the code, please cite the manuscript preprint. 
 
 This repository is organized as follows:
 
@@ -17,8 +21,13 @@ Scripts are all in the main project folder.
 To run models for summer flounder, follow these steps:
 
 1. Download the 2020 [OceanAdapt](oceanadapt.rutgers.edu) release from this stable DOI: [10.5281/zenodo.3885625](https://zenodo.org/record/3885625)
-1. Run `import_summer_flounder.R` to pull in and filter these data
-1. Run `get_summer_flounder_params.R` to mine parameters from summer flounder stock assessment tables 
-1. Run `prep_summer_flounder.R` to reshape the data for the DRM
-2. Explore `control_file.csv` and be sure you want to run the full factorial set of 64 models (if not, delete those rows)
+1. Run `01_import_summer_flounder.R` to pull in and filter these data
+1. Run `02_get_summer_flounder_params.R` to mine parameters from summer flounder stock assessment tables 
+1. Run `03_prep_stan_data.R` to reshape the data for the DRM
+1. Run `04_run_drms_local.R` to actually run the models locally on your machine. Be warned they are memory- and storage-intensive; you may want to trim down the number of models (by filtering `ctrl_file`), iterations, or chains for your computational setup.
+1. Run `05_convergence_checks.R` to summarize diagnostics for the models.
+1. Run `06_model_evaluation.R` to iterate over converged models, create alternative models (SDMs, persistence forecast), and quantify model skill.
+1. Run `07_paper_stats_and_figures.R` to generate the figures and in-text statistics in the manuscript.
+1. Run `00_supplement.Rmd` to generate the supplementary materials for the paper.
 
+Scripts 00 and 07 are still under development but it should be possible to skip directly to those and run them to explore the model outputs without actually running the DRMs locally. 
