@@ -241,22 +241,6 @@ fit_drm <- function(amarel = FALSE,
   
   # readr::write_rds(stan_model_fit, file = file.path(results_path,
   #                                                   "stan_model_fit.rds"))
-  # 
-  # abund_p_y <- dat_train_dens %>%
-  #   mutate(abundance = mean_dens * meanpatcharea)
-  #
-  # abund_p_y_hat <- tidybayes::spread_draws(stan_model_fit, density_hat[patch,year])
-  #
-  #
-  # abundance_v_time <- abund_p_y_hat %>%
-  #   ggplot(aes(year, density_hat)) +
-  #   stat_lineribbon() +
-  #   geom_point(data = abund_p_y, aes(year, abundance), color = "red") +
-  #   facet_wrap(~patch, scales = "free_y") +
-  #   labs(x="Year",y="Abundance") +
-  #   scale_fill_brewer()
-  # # abundance_v_time
-  # ggsave(abundance_v_time, filename=file.path(results_path,"abundance_fits.pdf"), width=7, height=4)
   #
   gc()
   return("all done")

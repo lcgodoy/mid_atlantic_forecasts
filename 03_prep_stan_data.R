@@ -2,7 +2,7 @@
 set.seed(42)
 library(tidyverse)
 #library(tidybayes)
-library(Cairo)
+#library(Cairo)
 library(here)
 library(magrittr)
 #library(rstan)
@@ -191,7 +191,8 @@ meanpatcharea <- mean(patchdat$patch_area_km2)
 
 if(make_data_plots==TRUE){
   gg_year_dens <- dat_train_dens %>% 
-    mutate(density = mean_dens * meanpatcharea) %>% 
+    mutate(density = mean_dens * (1/0.0384) * meanpatcharea) %>% 
+    # conversion factors: fish/tow * km2/tow * km2 ==> fish 
     ggplot() +
     geom_line(aes(x=year, y=density)) + 
     facet_wrap(~lat_floor, ncol=5) +
@@ -335,10 +336,9 @@ dens <- array(NA, dim=c(np, ny))
 for(p in 1:np){
   for(y in 1:ny){
     tmp2 <- dat_train_dens %>% filter(patch==p, year==y) 
-    #   left_join(patchdat, by = c("lat_floor","patch"))%>% 
-    #   mutate(mean_dens = mean_dens * patch_area_km2)
-    # dens[p,y] <- tmp2$mean_dens
-    dens[p,y] <- tmp2$mean_dens *meanpatcharea
+    dens[p,y] <- tmp2$mean_dens * (1/0.0384) * meanpatcharea
+    # converting fish/tow to fish
+    # mean counts (in fish/tow) * tows/km2 * km2 ==> fish 
   }
 }
 

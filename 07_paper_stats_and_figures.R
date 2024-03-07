@@ -420,7 +420,7 @@ gg_range_time_centroid <- ggplot(data = points_for_plot %>% filter(feature=='Cen
 ggsave(gg_range_time_centroid, filename=paste0(here("results"),"/centroid_time.png"), dpi=600, units="mm", width=75, height=55)
 
 abund_p_y_proj <-  dat_test_dens %>%
-  mutate(abundance = mean_dens * meanpatcharea)
+  mutate(abundance = mean_dens * (1/0.0384) * meanpatcharea)
 
 gg_observed_abundance_tile <- abund_p_y_proj %>%
   mutate(Year = (year + min(years_proj) - 1), Latitude = (patch + min(patches) - 1), Abundance=abundance) %>%

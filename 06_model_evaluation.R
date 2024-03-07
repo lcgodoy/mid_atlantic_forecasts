@@ -22,6 +22,10 @@ dat_test <- read_csv(here("processed-data","flounder_catch_at_length_fall_testin
 load(here("processed-data","stan_data_prep.Rdata"))
 quantiles_calc <- c(0.05, 0.5, 0.95)
 
+haul_km2_per_tow <- 0.0384 # conversion factor from hauls to km2; this is in units of km2/tow. 
+# see: https://github.com/afredston/marine_heatwaves_trawl/blob/main/prep_trawl_data.R#L59 
+
+
 # make user decisions 
 divergence_cutoff <- 0.05
 chains_cutoff <- 3 
@@ -56,7 +60,8 @@ dat_test_patch <- dat_test_dens %>%
     warm_edge = calculate_range_edge(patches=lat_floor, weights=mean_dens, q=0.05),
     centroid = weighted.mean(lat_floor, w=mean_dens),
     cold_edge = calculate_range_edge(patches=lat_floor, weights=mean_dens, q=0.95),
-    abund = sum(mean_dens) * meanpatcharea) %>% 
+    abund = sum(mean_dens) * (1/haul_km2_per_tow) * meanpatcharea) %>% 
+  # convert to fish in patch: fish/tow * tow/km2 * km2
   arrange(year) %>% 
   mutate(year = year + min(years_proj) - 1, 
          abund_lr = log(abund / lag(abund))) %>% 
@@ -141,7 +146,8 @@ gam_summary <- gam_out %>%
     warm_edge = calculate_range_edge(patches=lat_floor, weights=dens_pred, q=0.05),
     centroid = weighted.mean(lat_floor, w=dens_pred),
     cold_edge = calculate_range_edge(patches=lat_floor, weights=dens_pred, q=0.95),
-    abund = sum(dens_pred) * meanpatcharea) %>% 
+    abund = sum(dens_pred) * (1/haul_km2_per_tow) * meanpatcharea) %>% 
+  # convert to fish in patch. units: fish/tow * tow/km2 * km2
   arrange(year) %>% 
   mutate(abund_lr = log(abund / lag(abund))) %>% # note that this is technically the LR of change from 2007 to 2009 because the GAM doesn't use 2008
   pivot_longer(cols=warm_edge:abund_lr, names_to="feature", values_to="value_tmp") %>% 
@@ -160,7 +166,8 @@ gam_time <- spdata_proj %>%
     warm_edge = calculate_range_edge(patches=lat_floor, weights=dens_pred, q=0.05),
     centroid = weighted.mean(lat_floor, w=dens_pred),
     cold_edge = calculate_range_edge(patches=lat_floor, weights=dens_pred, q=0.95),
-    abund = sum(dens_pred) * meanpatcharea) %>% 
+    abund = sum(dens_pred) * (1/haul_km2_per_tow) * meanpatcharea) %>% 
+  # convert to fish in patch. units: fish/tow * tow/km2 * km2
   arrange(year) %>% 
   mutate(abund_lr = log(abund / lag(abund))) %>% # note that this is technically the LR of change from 2007 to 2009 because the GAM doesn't use 2008
   pivot_longer(cols=warm_edge:abund_lr, names_to="feature", values_to="value_tmp") 
@@ -175,7 +182,7 @@ persistence <- dat_train_dens %>%
     warm_edge = calculate_range_edge(patches=lat_floor, weights=mean_dens, q=0.05),
     centroid = weighted.mean(lat_floor, w=mean_dens),
     cold_edge = calculate_range_edge(patches=lat_floor, weights=mean_dens, q=0.95),
-    abund = sum(mean_dens) * meanpatcharea) 
+    abund = sum(mean_dens) * (1/haul_km2_per_tow) * meanpatcharea) 
 
 persistence_dat <- data.frame(year = years_proj) %>% 
   bind_rows(persistence) %>% 
