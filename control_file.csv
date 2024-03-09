@@ -10,7 +10,7 @@ v0.8,process error,1,0,0,0,0,0,1,1,0,0
 v0.9,"length comps, known f",1,1,0,0,0,0,0,1,1,1
 v0.10,"length comps, spawner recruit",1,1,0,0,0,1,0,1,0,0
 v0.11,"length comps, process error",1,1,0,0,0,0,1,1,0,0
-v0.12,"spawner recruit, known f",1,0,0,0,0,1,1,1,0,0
+v0.12,"spawner recruit, known f",1,0,0,0,0,1,0,1,1,1
 v0.13,"process error, known f",1,0,0,0,0,0,1,1,1,1
 v0.14,"spawner recruit, process error",1,0,0,0,0,1,1,1,0,0
 v0.15,"length comps, temperature movement",1,1,1,0,0,0,0,0,0,0

@@ -3,6 +3,7 @@
 ###############
 
 # much of this script is copied from prep_summer_flounder.R; revisit it if that script is changed! 
+# this takes a few hours to run because it loops over many models and loads the full posteriors to calculate summary statistics 
 
 # load packages 
 set.seed(42)
@@ -22,13 +23,15 @@ load(here("processed-data","stan_data_prep.Rdata"))
 quantiles_calc <- c(0.05, 0.5, 0.95)
 
 # make user decisions 
-divergence_cutoff <- 0.01
+divergence_cutoff <- 0.05
+chains_cutoff <- 3 
 generate_exploratory_plots <- FALSE
 
 # identify models that pass convergence checks 
 summarydat <- convergence_checks %>% 
   left_join(ctrl_file) %>% 
-  filter(mean_divergences < divergence_cutoff)
+  filter(mean_divergences <= divergence_cutoff, 
+         successful_chains >= chains_cutoff)
 
 # write a function to calculate patch edge positions 
 calculate_range_edge <- function(patches, weights, q){
@@ -39,9 +42,9 @@ calculate_range_edge <- function(patches, weights, q){
     if(p == 1) { # special case when range edge is in the first patch 
       out <- patches[1] + cutoff / weights[1]
     } else {
-    dec <- (cutoff - csum[p-1]) / weights[p] # calculate decimal position into the edge patch -- what proportion of the patch would be occupied, assuming a constant density 
-    out <- patches[p] + dec 
-    return(out) }
+      dec <- (cutoff - csum[p-1]) / weights[p] # calculate decimal position into the edge patch -- what proportion of the patch would be occupied, assuming a constant density 
+      out <- patches[p] + dec 
+      return(out) }
   } else {return(print("Length of patches and weights must be equal!"))}
 }
 
@@ -59,6 +62,7 @@ dat_test_patch <- dat_test_dens %>%
          abund_lr = log(abund / lag(abund))) %>% 
   pivot_longer(cols=c(warm_edge:abund_lr), names_to="feature", values_to="value") 
 
+write_csv(dat_test_patch, file=here("processed-data","dat_test_patch.csv"))
 ###############
 # FIT SDMS FOR COMPARISON
 ###############
@@ -124,11 +128,14 @@ predstt[is.na(predstt)] = 0 # is this correct?
 
 spdata_proj$predstt <- predstt
 
-# calculate residuals by feature (centroid, edges) of forecast 
-gam_summary <- spdata_proj %>% 
+gam_out <- spdata_proj %>% 
   mutate(lat_floor = floor(lat)) %>% 
   group_by(lat_floor, year) %>% 
-  summarise(dens_pred = mean(exp(predstt))) %>% # aggregate to patch scale for comparison to DRM 
+  summarise(dens_pred = mean(exp(predstt)))# aggregate to patch scale for comparison to DRM 
+write_csv(gam_out, file = here("processed-data","gam_abundance_time.csv"))
+
+# calculate residuals by feature (centroid, edges) of forecast 
+gam_summary <- gam_out %>% 
   group_by(year) %>% # calculate summary stats 
   summarise(
     warm_edge = calculate_range_edge(patches=lat_floor, weights=dens_pred, q=0.05),
@@ -182,6 +189,14 @@ persistence_summary <- persistence_dat %>%
          resid_sq = resid^2, 
          .keep = "unused", # drop all the columns used in calculations 
          id = "Persistence") 
+
+points_for_plot <- dat_test_patch %>% 
+  mutate(id = 'Observed')%>% rename(value_tmp = value) %>% 
+  bind_rows(gam_time %>% mutate(id = 'GAM') )  %>% 
+  bind_rows(persistence_dat %>% pivot_longer(cols=c('warm_edge','cold_edge','abund','centroid'), values_to='value_tmp', names_to='feature') %>% mutate(id='Persistence')) %>% 
+  filter(feature %in% c('warm_edge','cold_edge','centroid')) %>% 
+  mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature)) 
+write_csv(points_for_plot, file=here("processed-data","points_for_plot.csv"))
 
 ###############
 # SUMMARIZE DRM OUTPUTS
@@ -253,6 +268,9 @@ for(i in 1:nrow(summarydat)){
 }
 write_csv(drm_out, file=here("processed-data","posteriors_for_model_evaluation.csv"))
 
+drm_out <- drm_out %>% 
+  filter(id %in% summarydat$id)
+
 drm_summary <- drm_out %>% 
   filter(!is.na(resid)) %>% 
   group_by(year, feature, id) %>% 
@@ -271,84 +289,5 @@ dat_forecasts_summ <- dat_forecasts %>%
             Bias = mean(resid)) %>% 
   pivot_longer(cols=c(RMSE, Bias), values_to="value", names_to="metric") 
 
-#####
-# plots 
-#####
+write_csv(dat_forecasts_summ, file = here("processed-data","model_comparison_summary.csv"))
 
-gg_metrics <- dat_forecasts_summ  %>% 
-  mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature),
-         metric = case_match(metric, "rmse" ~ "RMSE", "bias" ~ "Bias", .default=metric), 
-         type = ifelse(str_detect(id, "0."),"DRM", id),
-         metric = factor(metric, levels = c("RMSE","Bias")))  %>%  
-  ggplot(aes(x=feature, y=value)) + 
-  geom_point(aes(color=type, fill=type),size=1) +
-  geom_text_repel(aes(label=id), hjust = 1, max.overlaps = Inf) +
-  scale_color_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
-  scale_fill_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
-  theme_bw() + 
-  facet_wrap(~metric, scales="free_y") +
-  labs(x="Feature", y="Metric") + 
-  theme(legend.position = "bottom")
-gg_metrics
-
-gg_metrics2 <- dat_forecasts_summ  %>% 
-  mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature),
-         type = ifelse(str_detect(id, "0."),"DRM", id),
-         metric = factor(metric, levels = c("RMSE","Bias")),
-         id = gsub("v0.", "v", id))  %>%  
-  pivot_wider(names_from = metric, values_from = value) %>% 
-  ggplot(aes(x=RMSE, y=Bias)) + 
-  geom_point(aes(color=type, fill=type),size=1) +
-  geom_text_repel(aes(label=id), hjust = 1, max.overlaps = Inf) +
-  scale_color_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
-  scale_fill_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
-  theme_bw() + 
-  facet_wrap(~feature) +
-  theme(legend.position = "bottom",
-        legend.title=element_blank())
-gg_metrics2
-ggsave(gg_metrics2, filename=here("results","bias_v_rmse.png"), width=110, height=60, dpi=600, units="mm", scale=1.5)
-
-# want to plot dat_test_patch, gam_time, and 
-
-#     gg_length <- n_at_length_hat %>% 
-#       ggplot(aes(length, plength)) +
-#       stat_lineribbon(size = .1) +
-#       geom_point(data = n_p_l_y, aes(length, plength), color = "red", alpha = 0.25) +
-#       facet_grid(patch ~ year, scales = "free_y") + 
-#       scale_x_continuous(limits = c(0, 50)) # generates warnings because of the close-to-zero probabilities at larger lengths
-
-abund_p_y_proj <-  dat_test_dens %>%
-  mutate(abundance = mean_dens * meanpatcharea)
-
-gg_observed_abundance_tile <- abund_p_y_proj %>%
-  mutate(Year = (year + min(years_proj) - 1), Latitude = (patch + min(patches) - 1), Abundance=abundance) %>%
-  ggplot(aes(x=Year, y=Latitude, fill=Abundance)) +
-  geom_tile() +
-  theme_bw() +
-  scale_x_continuous(breaks=seq(min(years_proj), max(years_proj), 1)) +
-  scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
-  scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
-  labs(title="Observed")
-
-gg_real <- dat_test_patch %>% 
-  filter(feature %in% c('centroid','cold_edge','warm_edge')) %>% 
-  ggplot(aes(x=year, y=value )) + 
-  geom_line() +
-  geom_point() +
-  theme_bw() + 
-  labs(x="Year", y="Latitude") + 
-  facet_wrap(~feature, ncol=1)
-gg_real
-
-gg_real_plus <- 
-  
-  gg_bias <- dat_forecasts %>% 
-  ggplot(aes(x=year, y=resid,color=model_name, fill=model_name, shape = model_name )) + 
-  geom_line() +
-  geom_point() +
-  theme_bw() + 
-  theme(legend.position = "bottom") +
-  labs(x="Year", y="Residuals (° lat)") + 
-  facet_wrap(~feature)
-gg_bias
