@@ -11,7 +11,7 @@ library(Matrix)
 library(rstanarm)
 library(cmdstanr)
 library(data.table)
-
+set.seed(424242)
 rstan_options(javascript = FALSE, auto_write = TRUE)
 
 # load fit_drm function 
@@ -29,10 +29,10 @@ ctrl_file <- read_csv("control_file.csv")
 ctrl_file <- read_csv("control_file.csv") %>%
   filter(
     eval_l_comps == 0,
-    spawner_recruit_relationship == 0,
-    process_error_toggle == 1,
-    known_f == 1,
-    T_dep_recruitment == 1
+    spawner_recruit_relationship == 1,
+    process_error_toggle == 0,
+    known_f == 0,
+    T_dep_mortality == 1
   ) |>
   ungroup() |>
   slice(1)
@@ -105,23 +105,25 @@ test <- tidybayes::spread_draws(diagnostic_fit, density_hat[patch,year],theta[pa
 
 load(here("processed-data","stan_data_prep.Rdata"))
 
-test <- test |> 
-  mutate(predicted_abundance = density_hat * theta) |> 
-  left_join(abund_p_y, by = c("patch", "year"))
-
-
-test |> 
-  ggplot(aes(abundance, predicted_abundance)) + 
-  geom_point(alpha = 0.25) + 
-  geom_abline(slope = 1, intercept = 0, color = "red") + 
-  geom_smooth(method = "lm") + 
-  scale_x_continuous("Observed Number Density") + 
-  scale_y_continuous(name = "Probability of occurance * Predicted Number Density") + 
-  theme_minimal()
 
   # visualize abundance over time
   abund_p_y <-  dat_train_dens %>%
     mutate(abundance = mean_dens * meanpatcharea)
+  
+  test <- test |> 
+    mutate(predicted_abundance = density_hat * theta) |> 
+    left_join(abund_p_y, by = c("patch", "year"))
+  
+  
+  test |> 
+    ggplot(aes(abundance, predicted_abundance)) + 
+    geom_point(alpha = 0.25) + 
+    geom_abline(slope = 1, intercept = 0, color = "red") + 
+    geom_smooth(method = "lm") + 
+    scale_x_continuous("Observed Number Density") + 
+    scale_y_continuous(name = "Probability of occurance * Predicted Number Density") + 
+    theme_minimal()
+  
   
   abund_p_y_hat <- tidybayes::spread_draws(diagnostic_fit, density_hat[patch,year], ndraws  =100)
   
