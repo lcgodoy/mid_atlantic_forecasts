@@ -32,7 +32,7 @@ ctrl_file <- read_csv("control_file.csv") %>%
     spawner_recruit_relationship == 1,
     process_error_toggle == 0,
     known_f == 0,
-    T_dep_mortality == 1
+    T_dep_mortality == 0
   ) |>
   ungroup() |>
   slice(1)
@@ -116,7 +116,7 @@ load(here("processed-data","stan_data_prep.Rdata"))
   
   
   test |> 
-    ggplot(aes(abundance, predicted_abundance)) + 
+    ggplot(aes(abundance, predicted_abundance / 10)) + 
     geom_point(alpha = 0.25) + 
     geom_abline(slope = 1, intercept = 0, color = "red") + 
     geom_smooth(method = "lm") + 
