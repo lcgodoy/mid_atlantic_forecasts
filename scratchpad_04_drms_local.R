@@ -11,7 +11,7 @@ library(Matrix)
 library(rstanarm)
 library(cmdstanr)
 library(data.table)
-
+set.seed(424242)
 rstan_options(javascript = FALSE, auto_write = TRUE)
 
 # load fit_drm function 

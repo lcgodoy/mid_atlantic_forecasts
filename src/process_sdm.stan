@@ -179,7 +179,7 @@ functions {
       for (a in 1 : n_ages) {
         for (y in 1 : ny_train) {
           if (T_dep_mortality == 1) {
-            surv[p, a, y] = exp(-((f_a_y[a, y] + m))) * T_adjust[p, y];
+            surv[p, a, y] = exp(-((f_a_y[a, y] + m))) * T_adjust[p, y]; // adjust survival down when off of topt
           }
           
           if (T_dep_mortality == 0) {
