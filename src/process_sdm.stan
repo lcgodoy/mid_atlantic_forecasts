@@ -238,9 +238,9 @@ functions {
         for (a in 1 : n_ages) {
           if (a == 1) {
             if (T_dep_recruitment == 1 && spawner_recruit_relationship == 0) {
-              n_at_age_hat[1, p, a] = init_dep[p] * mean_recruits * beta_rec
-              * T_adjust[p, 1]
-              * exp(sigma_r * raw[1]
+              n_at_age_hat[1, p, a] = init_dep[p] * mean_recruits * 
+              * exp(beta_rec * T_adjust[p, 1] +
+                    sigma_r * raw[1]
               - pow(sigma_r, 2) / 2); // initialize age 0 with mean recruitment in every patch
             }
             if (T_dep_recruitment == 0 && spawner_recruit_relationship == 0) {
@@ -255,7 +255,8 @@ functions {
             }
             if (T_dep_recruitment == 1 && spawner_recruit_relationship == 1) {
               n_at_age_hat[1, p, a] = init_dep[p] * r0
-              * exp(sigma_r * raw[1]
+              * exp(beta_rec * T_adjust[p, 1] +
+                    sigma_r * raw[1]
               - pow(sigma_r, 2) / 2)
               * T_adjust[p, 1] * beta_rec;
             }
@@ -289,8 +290,8 @@ functions {
         
         if (T_dep_recruitment == 1 && spawner_recruit_relationship == 0) {
           n_at_age_hat[y, p, 1] = mean_recruits
-          * exp(rec_dev[y - 1] - pow(sigma_r, 2) / 2)
-          * T_adjust[p, y - 1] * beta_rec;
+          * exp(beta_rec * T_adjust[p, 1] +
+                rec_dev[y - 1] - pow(sigma_r, 2) / 2);
         }
         if (T_dep_recruitment == 0 && spawner_recruit_relationship == 0) {
           n_at_age_hat[y, p, 1] = mean_recruits
