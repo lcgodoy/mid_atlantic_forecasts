@@ -257,8 +257,7 @@ functions {
               n_at_age_hat[1, p, a] = init_dep[p] * r0
               * exp(beta_rec * T_adjust[p, 1] +
                     sigma_r * raw[1]
-              - pow(sigma_r, 2) / 2)
-              * T_adjust[p, 1] * beta_rec;
+              - pow(sigma_r, 2) / 2);
             }
           } // close age==1 case
           else {
