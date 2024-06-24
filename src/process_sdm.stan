@@ -88,14 +88,43 @@ functions {
     return quant_position;
   } // close quantile function
   
-  /**
-  * Run the population model forward in time given temperature etc. Return numbers at age by patch for each year
-  * Go through and fill in this stuff would be good. 
-  * @param np number of patches
-  * @param ny_train number of years of training data
-  * @return an array of numbers by age, patch, and year
-  */
-  
+/**
+ * Run the population model forward in time given temperature etc. Return
+ * numbers at age by patch for each year
+ * @param np number of patches
+ * @param ny_train number of years of training data
+ * @param n_ages number of age classes
+ * @param n_lbins ??
+ * @param age_at_maturity initial age at which "movement is allowed"
+ * @param sbt sea bottom temperature
+ * @param Topt Optimal temperature
+ * @param width width for temperature suitability index
+ * @param exp_yn ?? (it's about how I_{p, t} is calculated)
+ * @param T_dep_mortality Binary: mortality depending on temperature?
+ * @param T_dep_movement Binary: movement depending on temperature?
+ * @param f_a_y f_{at}?
+ * @param m natural mortality (instantaneous) rate
+ * @param d isotropical dispersal rate
+ * @param beta_t ?? (associated to movement matrices)
+ * @param T_dep_recruitment flag for?
+ * @param spawner_recruit_relationship self explanatory flag?
+ * @param init_dep ??
+ * @param mean_recruits overall average recruitment (\mu_r?)
+ * @param beta_rec recruitment change per unit of I_{p, t}
+ * @param sigma_r conditional variance in the AR(1) process
+ * @param raw white noise (sigma_r * raw is the error term of the AR(1) process)
+ * @param r0 recruitment if population were not fished
+ * @param maturity_at_age ?? (used for SSB)
+ * @param wt_at_age ?? (used for SSB)
+ * @param alpha autocorr in the AR(1) term
+ * @param h steepness parameter of the Beverton-Holt model; it controls how
+ *    sensitive recruitment was to spawning stock biomass
+ * @param ssb0 theoretical max of spawning stock biomass
+ * @param d_at_age isotropic dispersal rate
+ * @param init_n_at_age N_{a, p, 1}?
+ * @param use_init_n_at_age flag for quantity above
+ * @return an array of numbers by age, patch, and year
+ */
   array[] matrix simulate_population(int np, int ny_train, int n_ages,
   int n_lbins, int age_at_maturity,
   matrix sbt, real Topt, real width,
@@ -109,10 +138,6 @@ functions {
   real r0, vector maturity_at_age,
   vector wt_at_age, real alpha, real h,
   real ssb0, vector d_at_age,
-  matrix l_at_a_key,
-  vector selectivity_at_bin,
-  real beta_obs_int, real beta_obs,
-  int number_quantiles,
   matrix init_n_at_age,
   int use_init_n_at_age) {
     //// define variables ////
