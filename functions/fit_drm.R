@@ -83,17 +83,19 @@ fit_drm <- function(amarel = FALSE,
     )
   }
   
+  # by default f is a time-varying instantaneous rate 
+  # if we want to turn that off: 
   if (known_historic_f == 0) {
-    f <- matrix(0.2, nrow = nrow(f), ncol = ncol(f))
-    
+    f <- matrix(0.334, nrow = nrow(f), ncol = ncol(f))
+    # estimated f in 2017 from NOAA SAW 66
   }
   
+  # keep the values from the final year of f for the projections
   if (known_f == 0) {
     f_proj <-
       matrix(rep(f[, ncol(f)], ncol(f_proj)),
              ncol = ncol(f_proj),
              nrow = nrow(f_proj))
-    
   }
   
   if (T_dep_movement == 1) {
@@ -127,11 +129,8 @@ fit_drm <- function(amarel = FALSE,
     wt_at_age = wt_at_age,
     do_dirichlet = do_dirichlet,
     eval_l_comps = eval_l_comps,
-    # evaluate length composition data? 0=no, 1=yes
     T_dep_mortality = T_dep_mortality,
-    # CURRENTLY NOT REALLY WORKING
     T_dep_recruitment = T_dep_recruitment,
-    # think carefully before making more than one of the temperature dependencies true,
     T_dep_movement = T_dep_movement,
     spawner_recruit_relationship = spawner_recruit_relationship,
     run_forecast = run_forecast,

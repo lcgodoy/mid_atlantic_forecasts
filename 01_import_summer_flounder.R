@@ -16,6 +16,11 @@
 
 ###################################
 
+#################
+# This script pulls in summer flounder data from NOAA bottom trawl data
+# Manual data download is required (see below) 
+
+
 # load packages
 library(tidyverse)
 library(here)
