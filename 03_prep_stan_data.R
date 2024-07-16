@@ -123,7 +123,7 @@ patchareas <- patchareas %>%
 
 patchareas$lat_floor <- patches
 
-patcharea <- patchareas$area_km2
+area <- patchareas$area_km2
 
 # get temperature data
 dat_train_sbt <- dat %>%   
@@ -226,6 +226,7 @@ dat_train_sbt$year= as.integer(as.factor(dat_train_sbt$year))
 dat_f_age$year = as.integer(as.factor(dat_f_age$year))
 dat_f_age_proj$year = as.integer(as.factor(dat_f_age_proj$year))
 
+# reshape all data for Stan 
 # make matrices/arrays from dfs -- slow 
 len <- array(0, dim = c(np, n_lbins, ny)) 
 for(p in 1:np){
@@ -245,7 +246,7 @@ dens <- array(NA, dim=c(np, ny))
 for(p in 1:np){
   for(y in 1:ny){
     tmp2 <- dat_train_dens %>% filter(patch==p, year==y) 
-    patcharea_p <- patcharea[p]
+    patcharea_p <- area[p]
     dens[p,y] <- tmp2$mean_dens * (1/0.0384) * patcharea_p
     # converting fish/tow to fish
     # mean counts (in fish/tow) * tows/km2 * km2 ==> fish 
@@ -295,7 +296,7 @@ bin_mids=lbins+0.5
 save(
   dat_train_dens,
   dat_test_dens,
-  patcharea,
+  area,
   np,
   n_ages,
   ny,

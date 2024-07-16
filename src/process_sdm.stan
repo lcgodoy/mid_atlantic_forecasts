@@ -423,7 +423,7 @@ data {
   
   array[np, ny_train] real dens; // MEAN density of individuals of any age in each haul; used for rescaling the abundance to fit to our data
   
-  array[np, ny_train] real area; // mean area swept per patch per year
+  vector[np] area; // mean area swept per patch 
   
   // environmental data 
   
@@ -686,14 +686,13 @@ transformed parameters {
         density_hat[p, y] = 0;
       }
       
-      // can add the poisson-link toggle here to calculate theta based on n, not density_hat
-      
       if (use_poisson_link == 1){
         
-        theta[p, y] = 1 - exp(-area[p,y] * density_hat[p, y]);
+        theta[p, y] = 1 - exp(-area[p] * density_hat[p, y]);
         
       } else {
         
+        // if not using Poisson link, calculate encounter probability with lognormal dsitribution 
         
         theta[p, y] = 1
         / (1
@@ -815,7 +814,7 @@ model {
 generated quantities {
   matrix[np, ny_train] dens_pp;
   array[ny_proj + 1] matrix[np, n_lbins] n_at_length_obs_proj;
-  array[ny_proj + 1] matrix[np, n_ages] n_at_age_proj; // fix this
+  array[ny_proj + 1] matrix[np, n_ages] n_at_age_proj; 
   array[ny_proj + 1] matrix[np, n_lbins] n_at_length_proj;
   array[np, ny_proj + 1] real density_obs_proj;
   array[np, ny_proj + 1] real density_proj;
@@ -886,11 +885,18 @@ generated quantities {
         
         density_proj[p, y] = sum(to_vector(n_at_length_proj[y, p, 1 : n_lbins])); // true population
         
+        
+      if (use_poisson_link == 1){
+        
+        theta_proj[p, y] = 1 - exp(-area[p] * density_proj[p, y]);
+        
+      } else {
         theta_proj[p, y] = 1
         / (1
         + exp(-(beta_obs_int
         + beta_obs
         * log(density_proj[p, y] + 1e-6))));
+      }
         
         density_obs_proj[p, y] = bernoulli_rng(theta_proj[p, y])
         * exp(normal_rng(log((density_proj[p, y] + 1e-6) / theta_proj[p, y]
