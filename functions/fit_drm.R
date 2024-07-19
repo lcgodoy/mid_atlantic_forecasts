@@ -86,7 +86,7 @@ fit_drm <- function(amarel = FALSE,
   # by default f is a time-varying instantaneous rate 
   # if we want to turn that off: 
   if (known_historic_f == 0) {
-    f <- matrix(0.334, nrow = nrow(f), ncol = ncol(f))
+    f <- matrix(0.2, nrow = nrow(f), ncol = ncol(f))
     # estimated f in 2017 from NOAA SAW 66
   }
   

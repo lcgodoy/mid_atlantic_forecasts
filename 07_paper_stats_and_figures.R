@@ -2,7 +2,6 @@
 
 library(tidyverse)
 library(here)
-
 # packages for map
 library("sf")
 library("rnaturalearth")
@@ -15,6 +14,7 @@ library(tidytext)
 library(ggrepel)
 library(ggh4x)
 library(ggdist)
+library(directlabels)
 theme_set(theme_bw())
 
 # data
@@ -131,18 +131,58 @@ ggmap <- ggplot(data = states) +
 ggsave(ggmap, filename=here("results","area_map.png"), width=110, height=110, dpi=600, units="mm")
 
 # hovmoller plot 
+
+# get bottom temperature data
 dat_btemp <- bind_rows(dat_catchonly, dat_test_catchonly) %>% 
-  mutate(lat_floor = floor(lat)) %>% 
-  group_by(year, lat_floor) %>% 
+  mutate(lat_floor_offset = floor(lat) + 0.5) %>% # offset for plotting 
+  group_by(year, lat_floor_offset) %>% 
   summarise(btemp = mean(btemp, na.rm=TRUE),
             n = length(haulid[!is.na(btemp)]))
 
+# calculate isotherms 
+
+# step 1: fit lm to temperature ~ latitude in every year 
+dat_btemp_lm <- bind_rows(dat_catchonly, dat_test_catchonly) %>% 
+  select(btemp, year, lat) %>% 
+  group_by(year) %>%
+  nest() %>%
+  mutate(
+    model = purrr::map(data, ~lm(btemp ~ lat, data = .x)), 
+    tidymodel = purrr::map(model, broom::tidy)
+  ) %>% 
+  unnest(tidymodel) %>%
+  dplyr::select(-data, -model)
+
+# step 2: use those lms to predict latitude in each year, given temperature 
+get_lat_from_temp <- function(temp, year.predict, dat) {
+  tmp <- dat %>% filter(year==year.predict)
+  intercept <- tmp %>% filter(term=="(Intercept)") %>%
+    pull(estimate)
+  slope <- tmp %>% filter(term=="lat") %>%
+    pull(estimate)
+  out <- (temp-intercept)/slope
+  return(out)
+}
+
+# step 3: estimate isotherm positions for a set of degrees 
+degrees <- seq(9, 15, 2) 
+isotherms <- as.data.frame(degrees) %>% 
+  crossing(unique(dat_btemp$year)) %>% 
+  rename(degrees = 1, year = 2) %>% 
+  rowwise() %>% 
+  mutate(est_iso = get_lat_from_temp(degrees, year, dat=dat_btemp_lm)) %>% 
+  mutate(degreeC = paste0(degrees, "°"))
+
+write_rds(isotherms, here("processed-data","sbt_isotherms.rds"))
+
 gg_btemp <- ggplot() + 
-  geom_raster(data=dat_btemp, aes(x=year, y=lat_floor, fill=btemp)) + 
+  geom_raster(data=dat_btemp, aes(x=year, y=lat_floor_offset, fill=btemp)) + 
   scale_fill_gradientn(colors=c("blue3","darkturquoise", "gold", "orangered", "red3"), limits = c(6,24), breaks = c(seq(6, 24, 2)),
                        guide = guide_colourbar(nbin=100, draw.ulim = FALSE, draw.llim = FALSE)) + 
-  scale_x_continuous(limits = c(1971, 2017), breaks=seq(1962, 2016, 4), expand = c(0, 0)) +
-  scale_y_continuous(limits = c(34, 45), breaks=seq(35, 44, 1), expand = c(0, 0)) +
+  geom_line(data=isotherms, aes(x=year, y=est_iso, group=degreeC)) +
+  geom_dl(data=isotherms, aes(x=year, y=est_iso, group=degreeC, label=degreeC), method=list(dl.trans(x = x + 0.5, y = y + 0.5, cex=0.8), "first.points")) +
+  scale_x_continuous(limits = c(1971, 2017), breaks=seq(1972, 2016, 4), expand = c(0, 0)) +
+  scale_y_continuous(limits = c(34.5, 45.5), breaks=seq(35, 45, 1), expand = c(0, 0)) +
   labs(x="Year", y="Latitude") +
   theme_bw() +
   theme(text=element_text(family="sans",size=12,color="black"),
@@ -153,6 +193,7 @@ gg_btemp <- ggplot() +
         plot.margin=margin(t = 15, r = 5, b = 5, l = 5, unit = "pt")) + 
   guides(fill = guide_colourbar(barwidth = 0.75, barheight = 25, title="SBT", reverse=TRUE)) +
   NULL
+gg_btemp
 ggsave(gg_btemp, filename=here("results","btemp_lat_time.png"), width=110, height=70, scale = 2.1, dpi=600, units="mm")
 
 # model comparison plots 
