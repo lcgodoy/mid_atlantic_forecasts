@@ -105,7 +105,8 @@ functions {
   int T_dep_recruitment,
   int spawner_recruit_relationship,
   vector init_dep, real mean_recruits,
-  real beta_rec, real sigma_r, vector raw,
+ // real beta_rec, 
+  real sigma_r, vector raw,
   real r0, vector maturity_at_age,
   vector wt_at_age, real alpha, real h,
   real ssb0, vector d_at_age,
@@ -238,7 +239,7 @@ functions {
         for (a in 1 : n_ages) {
           if (a == 1) {
             if (T_dep_recruitment == 1 && spawner_recruit_relationship == 0) {
-              n_at_age_hat[1, p, a] = init_dep[p] * mean_recruits * beta_rec
+              n_at_age_hat[1, p, a] = init_dep[p] * mean_recruits // * beta_rec
               * T_adjust[p, 1]
               * exp(sigma_r * raw[1]
               - pow(sigma_r, 2) / 2); // initialize age 0 with mean recruitment in every patch
@@ -257,7 +258,8 @@ functions {
               n_at_age_hat[1, p, a] = init_dep[p] * r0
               * exp(sigma_r * raw[1]
               - pow(sigma_r, 2) / 2)
-              * T_adjust[p, 1] * beta_rec;
+              * T_adjust[p, 1] //* beta_rec
+              ;
             }
           } // close age==1 case
           else {
@@ -290,7 +292,8 @@ functions {
         if (T_dep_recruitment == 1 && spawner_recruit_relationship == 0) {
           n_at_age_hat[y, p, 1] = mean_recruits
           * exp(rec_dev[y - 1] - pow(sigma_r, 2) / 2)
-          * T_adjust[p, y - 1] * beta_rec;
+          * T_adjust[p, y - 1] //* beta_rec
+          ;
         }
         if (T_dep_recruitment == 0 && spawner_recruit_relationship == 0) {
           n_at_age_hat[y, p, 1] = mean_recruits
@@ -586,7 +589,7 @@ parameters {
   
   real beta_t; // responsiveness of movement to temperature
   
-  real beta_rec; // responsivenses of mean recruits to temperature
+//  real beta_rec; // responsivenses of mean recruits to temperature
   
   real beta_obs_int; // intercept of detection probability
   
@@ -668,7 +671,8 @@ transformed parameters {
   exp_yn, T_dep_mortality, T_dep_movement,
   f, m, d, beta_t, T_dep_recruitment,
   spawner_recruit_relationship, init_dep,
-  mean_recruits, beta_rec, sigma_r, raw,
+  mean_recruits,// beta_rec, 
+  sigma_r, raw,
   r0, maturity_at_age, wt_at_age, alpha,
   h, ssb0, d_at_age, l_at_a_key,
   selectivity_at_bin, beta_obs_int,
@@ -748,7 +752,7 @@ model {
   
   beta_t ~ normal(pr_beta_t_mu, pr_beta_t_sigma);
   
-  beta_rec ~ normal(pr_beta_rec_mu, pr_beta_rec_sigma);
+ // beta_rec ~ normal(pr_beta_rec_mu, pr_beta_rec_sigma);
   
   alpha ~ beta(pr_alpha_alpha, pr_alpha_beta); 
   
@@ -863,7 +867,7 @@ generated quantities {
     T_dep_movement, f_proj, m, d, beta_t,
     T_dep_recruitment,
     spawner_recruit_relationship,
-    init_dep, mean_recruits, beta_rec,
+    init_dep, mean_recruits,// beta_rec,
     sigma_r, raw_proj, r0,
     maturity_at_age, wt_at_age, alpha, h,
     ssb0, d_at_age, l_at_a_key,

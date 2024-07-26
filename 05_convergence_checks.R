@@ -1,15 +1,10 @@
 set.seed(42)
 library(tidyverse)
-library(ggridges)
 library(tidybayes)
-#library(Cairo)
 library(here)
-library(magrittr)
 library(rstan)
-library(Matrix)
 library(rstanarm)
 library(cmdstanr)
-library(data.table)
 
 ctrl_file <- read_csv("control_file.csv") 
 

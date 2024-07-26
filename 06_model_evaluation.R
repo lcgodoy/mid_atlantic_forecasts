@@ -10,7 +10,6 @@ set.seed(42)
 library(tidyverse)
 library(magrittr)
 library(here)
-#library(Hmisc) # for wtd.quantile() 
 library(mgcv)
 library(tidybayes)
 library(ggrepel)
@@ -37,6 +36,11 @@ summarydat <- convergence_checks %>%
   filter(mean_divergences <= divergence_cutoff, 
          successful_chains >= chains_cutoff)
 
+# which models did not pass convergence checks?
+ctrl_file %>% 
+  filter(!id %in% summarydat$id) %>% 
+  pull(description, id)
+
 # write a function to calculate patch edge positions 
 calculate_range_edge <- function(patches, weights, q){
   if(length(patches) == length(weights)){
@@ -55,6 +59,8 @@ calculate_range_edge <- function(patches, weights, q){
 # what actually happened to edge and centroid positions in the testing data?
 # need to keep aggregated at patch scale so we are comparing evenly across models 
 dat_test_patch <- dat_test_dens %>% 
+  left_join(data.frame(lat_floor = patches, area = area)) %>% 
+  # NEED TO CORRECT THE BELOW FOR REAL PATCH AREAS! 
   group_by(year) %>% 
   summarise(
     warm_edge = calculate_range_edge(patches=lat_floor, weights=mean_dens, q=0.05),
