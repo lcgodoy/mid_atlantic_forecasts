@@ -9,7 +9,7 @@ functions {
       
       // return normal_lpdf(sbt | Topt, width);
       return log((1 / sqrt(2 * pi() * width))
-      * exp(-pow(sbt - Topt, 2) / (2 * pow(width, 2))));
+      * exp(-0.5 * square(sbt - Topt / width)));
     }
   }
   
@@ -271,22 +271,22 @@ functions {
               n_at_age_hat[1, p, a] = init_dep[p] * mean_recruits // * beta_rec
               * T_adjust[p, 1]
               * exp(sigma_r * raw[1]
-              - pow(sigma_r, 2) / 2); // initialize age 0 with mean recruitment in every patch
+              - square(sigma_r) / 2); // initialize age 0 with mean recruitment in every patch
             }
             if (T_dep_recruitment == 0 && spawner_recruit_relationship == 0) {
               n_at_age_hat[1, p, a] = init_dep[p] * mean_recruits
               * exp(sigma_r * raw[1]
-              - pow(sigma_r, 2) / 2); // initialize age 0 with mean recruitment in every patch
+              - square(sigma_r) / 2); // initialize age 0 with mean recruitment in every patch
             }
             if (T_dep_recruitment == 0 && spawner_recruit_relationship == 1) {
               n_at_age_hat[1, p, a] = init_dep[p] * r0
               * exp(sigma_r * raw[1]
-              - pow(sigma_r, 2) / 2); // scale it down a bit -- historical fishing was still occurring
+              - square(sigma_r) / 2); // scale it down a bit -- historical fishing was still occurring
             }
             if (T_dep_recruitment == 1 && spawner_recruit_relationship == 1) {
               n_at_age_hat[1, p, a] = init_dep[p] * r0
               * exp(sigma_r * raw[1]
-              - pow(sigma_r, 2) / 2)
+              - square(sigma_r) / 2)
               * T_adjust[p, 1] //* beta_rec
               ;
             }
@@ -311,7 +311,7 @@ functions {
       } // close y==2 case  
       else {
         rec_dev[y - 1] = alpha * rec_dev[y - 2]
-        + sqrt(1 - pow(alpha, 2)) * sigma_r * raw[y];
+        + sqrt(1 - square(alpha)) * sigma_r * raw[y];
       } // close ifelse
       
       // describe population dynamics
@@ -320,13 +320,13 @@ functions {
         
         if (T_dep_recruitment == 1 && spawner_recruit_relationship == 0) {
           n_at_age_hat[y, p, 1] = mean_recruits
-          * exp(rec_dev[y - 1] - pow(sigma_r, 2) / 2)
+          * exp(rec_dev[y - 1] - square(sigma_r) / 2)
           * T_adjust[p, y - 1] //* beta_rec
           ;
         }
         if (T_dep_recruitment == 0 && spawner_recruit_relationship == 0) {
           n_at_age_hat[y, p, 1] = mean_recruits
-          * exp(rec_dev[y - 1] - pow(sigma_r, 2) / 2);
+          * exp(rec_dev[y - 1] - square(sigma_r) / 2);
         }
         
         if (T_dep_recruitment == 0 && spawner_recruit_relationship == 1) {
@@ -335,7 +335,7 @@ functions {
           + ssb[p, y - 1] * (h - 0.2));
           
           n_at_age_hat[y, p, 1] = n_at_age_hat[y, p, 1]
-          * exp(rec_dev[y - 1] - pow(sigma_r, 2) / 2);
+          * exp(rec_dev[y - 1] - square(sigma_r) / 2);
         }
         if (T_dep_recruitment == 1 && spawner_recruit_relationship == 1) {
           n_at_age_hat[y, p, 1] = ((0.8 * r0 * h * ssb[p, y - 1])
@@ -344,7 +344,7 @@ functions {
           * T_adjust[p, y - 1];
           
           n_at_age_hat[y, p, 1] = n_at_age_hat[y, p, 1]
-          * exp(rec_dev[y - 1] - pow(sigma_r, 2) / 2);
+          * exp(rec_dev[y - 1] - square(sigma_r) / 2);
         }
         // 
         // why estimate raw and sigma_r? we want to estimate process error
@@ -824,13 +824,13 @@ model {
         
         if (use_poisson_link == 1){
           
-          log(dens[p, y]) ~ normal(log((density_hat[p, y] + 1e-6)/ (theta[p,y] + 1e-6)) - pow(sigma_obs,2)/2, sigma_obs);
+          log(dens[p, y]) ~ normal(log((density_hat[p, y] + 1e-6)/ (theta[p,y] + 1e-6)) - square(sigma_obs)/2, sigma_obs);
           
         } else {
           
           if (density_hat[p, y] > 0 && theta[p,y] > 0){
             
-            log(dens[p, y]) ~ normal(log((density_hat[p, y] + 1e-6) / (theta[p,y] + 1e-6)) - pow(sigma_obs,2)/2, sigma_obs);
+            log(dens[p, y]) ~ normal(log((density_hat[p, y] + 1e-6) / (theta[p,y] + 1e-6)) - square(sigma_obs)/2, sigma_obs);
             
           }
         }
@@ -870,7 +870,7 @@ generated quantities {
         if (theta[p,y] > 0){
           
           dens_pp[p, y] = bernoulli_rng(theta[p, y])
-          * exp(normal_rng(log(density_hat[p, y] / theta[p,y] + 1e-3) - pow(sigma_obs,2)/2,
+          * exp(normal_rng(log(density_hat[p, y] / theta[p,y] + 1e-3) - square(sigma_obs)/2,
           sigma_obs));
         } else {
           dens_pp[p, y] = 0;
