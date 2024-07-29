@@ -1,130 +1,54 @@
+#################
+# This script assembles all of the parameters needed to run the DRM for summer flounder 
+# It is hard-coded by nature and would need to be substantially revised for new species 
 
 set.seed(42)
+library(sf) # for getting patch areas 
 library(tidyverse)
-#library(tidybayes)
-#library(Cairo)
 library(here)
-library(magrittr)
-#library(rstan)
-library(Matrix)
-#library(rstanarm)
-library(geosphere) # used for setting up lat bands
-#library(purrr)
 library(lme4) # used for interpolating a few temperature values
 funs <- list.files("functions")
 sapply(funs, function(x) source(file.path("functions",x)))
 
 dat <- read_csv(here("processed-data","flounder_catch_at_length_fall_training.csv"))
-# dat %<>% filter(length >17)
+dat <- dat %>% filter(length >17)
 dat_test <- read_csv(here("processed-data","flounder_catch_at_length_fall_testing.csv"))
-
-
+dat_f_age_prep <- read_csv(here("processed-data","summer_flounder_F_by_age.csv")) %>%
+  rename_with(str_to_lower)
+wt_at_age_raw <- read_csv(here("processed-data","summer_flounder_wt_at_age.csv"))
 #############
 # make model decisions that involve data prep
 #############
-trim_to_abundant_patches=FALSE
-make_data_plots <- FALSE
-time_varying_f = TRUE
 
-
-# set fixed parameters from stock assessment
+# set fixed parameters from stock assessment (NOAA SAW 66)
 loo = 83.6
 k = 0.14
 m = 0.25
-age_at_maturity = 2
+age_at_maturity = 3 # https://www.fisheries.noaa.gov/species/summer-flounder
 t0=-.2
 cv= 0.2 # guess
 min_age = 0
-max_age = 20
-length_50_sel_guess= 20 # THIS IS A RANDOM GUESS, I can't find help in the stock assessment
+max_age = 15 
+length_50_sel_guess= 20 
 age_sel= 0
-sel_100 = 3 # not sure if this should be 2 or 3. it's age 2, but it's the third age category because we start at 0, which I think Stan will classify as 3...?
+sel_100 = 3 # this is actually age 2, but we start counting ages at 0 (recruits), hence the 3 passed to Stan here 
 h = 0.8
 
-if(time_varying_f==FALSE){
-  f_constant=0.334 
-}
-
-if(trim_to_abundant_patches==TRUE){
-  focal_patch_n = 2 # adjust accordingly
-}
-
-if(time_varying_f==TRUE){
-  # the f-at-age data starts in 1982; fill in the previous years with the earliest year of data
-  dat_f_age_prep <- read_csv(here("processed-data","summer_flounder_F_by_age.csv")) %>%
-    rename_with(str_to_lower)
-  f_early <- expand_grid(year=seq(1972, 1981, 1), age=unique(dat_f_age_prep$age)) %>% 
-    left_join(dat_f_age_prep %>% filter(year==1982) %>% select(age, f)) 
-  dat_f_age_prep <- bind_rows(dat_f_age_prep, f_early)
-}
-
-if(make_data_plots==TRUE){
-  library(ggridges)
-  
-  # how much variation is there in length frequency over time?
-  gglength <- dat %>% 
-    mutate(lat_floor = floor(lat)) %>% 
-    filter(between(lat_floor, 37,41)) %>% 
-    group_by(length, year, lat_floor) %>% 
-    summarise(total = sum(number_at_length)) %>% 
-    mutate(year = as.character(year)) %>% 
-    ggplot(aes(x=length, y=year)) +
-    geom_density_ridges(aes(height=..density..,
-                            weight=total),    
-                        scale= 4,
-                        stat="density") +
-    scale_y_discrete(expand = c(0, 0))  + 
-    facet_wrap(~lat_floor, ncol=5) + 
-    coord_flip() +
-    theme(axis.text.x=element_text(angle = -90))
-  # gglength  
-  ggsave(gglength, filename=here("results","summer_flounder_length_freq.png"), width=9, height=4, scale=1.75)
-  
-  # by patch -- 
-  ggpatchlength <- dat %>% 
-    mutate(lat_floor = floor(lat)) %>% 
-    group_by(length, lat_floor, year) %>% 
-    summarise(total = sum(number_at_length)) %>% 
-    mutate(year = as.character(year)) %>% 
-    ggplot(aes(x=length, y=year)) +
-    geom_density_ridges(aes(height=..density..,
-                            weight=total),    
-                        scale= 4,
-                        stat="density") +
-    scale_y_discrete(expand = c(0, 0)) +
-    facet_wrap(~lat_floor, scales = "free_y", ncol=5)
-  # ggpatchlength  
-  ggsave(ggpatchlength, filename=here("results","summer_flounder_length_freq_by_patch.png"), height=5, width=8, dpi=160)
-  # not sure this doesn't have any data in the other patches, maybe they are missing years? 
-}
+# the f-at-age data starts in 1982; fill in the previous years with the earliest year of data
+f_early <- expand_grid(year=seq(1972, 1981, 1), age=unique(dat_f_age_prep$age)) %>% 
+  left_join(dat_f_age_prep %>% filter(year==1982) %>% select(age, f)) 
+dat_f_age_prep <- bind_rows(dat_f_age_prep, f_early)
 
 ##########
 # prep data for fitting
 ##########
 
-if(trim_to_abundant_patches==TRUE){
-  # reshape fish data 
-  use_patches <- dat %>% 
-    mutate(lat_floor = floor(lat)) %>% 
-    group_by(lat_floor) %>% 
-    summarise(total = sum(number_at_length)) %>% 
-    arrange(-total) %>% 
-    slice(1:focal_patch_n) # CHECK THIS MANUALLY TO BE SURE IT'S SANE, AND PATCHES ARE CONTIGUOUS
-  
-  patches <- sort(unique(use_patches$lat_floor))
-  np = length(patches) 
-}
+# reshape fish data 
+patches <- sort(unique(dat %>% 
+                         mutate(lat_floor = floor(lat), .keep="none") %>% 
+                         pull(lat_floor)))
 
-if(trim_to_abundant_patches==FALSE){
-  # reshape fish data 
-  use_patches <- dat %>% 
-    mutate(lat_floor = floor(lat)) %>% 
-    group_by(lat_floor) %>% 
-    summarise(total = sum(number_at_length))
-  
-  patches <- sort(unique(use_patches$lat_floor))
-  np = length(patches) 
-}
+np = length(patches) 
 
 dat_train_lengths <- dat %>% 
   mutate(lat_floor = floor(lat)) %>% 
@@ -172,34 +96,36 @@ ny <- length(years)
 ny_proj <- length(years_proj)
 
 # get patch area 
-patchdat <- dat %>% 
-  select(lat, lon) %>%
+patchdat_prep <- dat %>% 
+  select(year, lat, lon) %>%
   distinct() %>%
   mutate(lat_floor = floor(lat)) %>% 
-  filter(lat_floor %in% use_patches$lat_floor) %>% 
-  group_by(lat_floor) %>% 
-  summarise(max_lon=max(lon),
-            min_lon=min(lon)) %>% 
-  rowwise() %>% 
-  mutate(lon_dist = distGeo(p1=c(max_lon, lat_floor+0.5), p2=c(min_lon, lat_floor+0.5))/1000, # get distance between the furthest longitudes in km, at the midpoint of the lat band 
-         patch_area_km2 = lon_dist * 111) %>%  # 1 degree latitude = 111 km 
-  select(lat_floor, patch_area_km2) %>% 
-  filter(lat_floor %in% patches) %>% 
-  ungroup() %>% 
-  mutate(patch = as.integer(as.factor(lat_floor)))
-meanpatcharea <- mean(patchdat$patch_area_km2)
+  filter(lat_floor %in% patches)
 
-if(make_data_plots==TRUE){
-  gg_year_dens <- dat_train_dens %>% 
-    mutate(density = mean_dens * (1/0.0384) * meanpatcharea) %>% 
-    # conversion factors: fish/tow * km2/tow * km2 ==> fish 
-    ggplot() +
-    geom_line(aes(x=year, y=density)) + 
-    facet_wrap(~lat_floor, ncol=5) +
-    labs(title="Summer flounder fall CPUE", x="Year", y="Density per patch")
-  ggsave(gg_year_dens, filename=here("results","training_cpue_by_patch.png"), width=7, height=4, scale=1.2)
+patchareas <- NULL
+for(i in 1:np){
+  tmp <- patchdat_prep %>% 
+    filter(lat_floor == patches[i]) %>% 
+    distinct()
+  
+  plot(tmp$lon, tmp$lat)
+  
+  polygon <- st_as_sf(tmp, coords = c("lon", "lat"), crs = 4326) %>%  summarise() %>%  st_concave_hull(., ratio=0.3) # ratio tunes how tightly to fit the polygon around the points; examine plots to be sure this reflects the outline of the points well 
+  
+  plot(polygon)
+  
+  area <- st_area(polygon)
+  patchareas <- rbind(patchareas, data.frame(patch = i, area_m2 = area))
 }
 
+patchareas <- patchareas %>% 
+  mutate(area_km2 = as.numeric(area_m2 / 1e6), .keep="unused")
+
+patchareas$lat_floor <- patches
+
+area <- patchareas$area_km2
+
+# get temperature data
 dat_train_sbt <- dat %>%   
   mutate(lat_floor = floor(lat)) %>% 
   group_by(lat_floor, year) %>% 
@@ -222,7 +148,6 @@ nrow(dat_train_sbt)==(np*ny)
 nrow(dat_test_sbt) == (np*ny_proj) # false because of missing data
 
 # some SBT data are missing: lat 35, 36, and 37 in 2008
-# THIS IS VERY HARD CODED! DANGER
 sbt_lme <- lmer(btemp ~ lat + (1|year), data=bind_rows(dat, dat_test))
 sbt_test_fill <- data.frame(
   lat_floor = c(35, 36, 37),
@@ -234,14 +159,6 @@ sbt_test_fill <- data.frame(
   ))
 dat_test_sbt <- bind_rows(dat_test_sbt, sbt_test_fill)
 nrow(dat_test_sbt) == (np*ny_proj) # should be true now 
-
-
-if(time_varying_f==TRUE){
-  # now that we have the max_age, fill in f for years above 7 (since the f for age=7 is really for 7+)
-  older_ages <- expand_grid(age=seq(max(dat_f_age_prep$age)+1, max_age, 1), year= unique(dat_f_age_prep$year)) %>% 
-    left_join(dat_f_age_prep %>% filter(age==max(age)) %>% select(year, f))
-  dat_f_age_prep %<>% bind_rows(older_ages)
-}
 
 # make length to age conversions
 length_at_age_key <-
@@ -256,13 +173,6 @@ length_at_age_key <-
     linf_buffer = 1.5
   )
 
-# length_at_age_key %>% 
-#   filter(age > 5) %>% 
-#   ggplot(aes(age, length_bin, fill = p_bin)) + 
-#   geom_hline(aes(yintercept = loo)) +
-#   geom_tile() + 
-#   scale_fill_viridis_c()
-
 l_at_a_mat <- length_at_age_key %>% 
   select(age, length_bin, p_bin) %>% 
   pivot_wider(names_from = length_bin, values_from = p_bin) %>% 
@@ -270,17 +180,20 @@ l_at_a_mat <- length_at_age_key %>%
   select(-age) %>% 
   as.matrix()
 
-# prep f data
-if(time_varying_f==TRUE){
-  dat_f_age <- dat_f_age_prep %>% 
-    filter(year %in% years) 
-  
-  dat_f_age_proj <- dat_f_age_prep %>% 
-    filter(year %in% years_proj) %>%
-    bind_rows(dat_f_age %>% filter(year==max(year))) # need final year of training data to initialize projection
-} else {
-  f_prep=f_constant
-}
+# tidy f data
+# the source data only has f estimates up to age 7
+# fill in other ages with f
+older_ages <- expand_grid(age=seq(max(dat_f_age_prep$age)+1, max_age, 1), year= unique(dat_f_age_prep$year)) %>% 
+  left_join(dat_f_age_prep %>% filter(age==max(age)) %>% select(year, f))
+dat_f_age_prep <- dat_f_age_prep %>% 
+  bind_rows(older_ages)
+
+dat_f_age <- dat_f_age_prep %>% 
+  filter(year %in% years) 
+
+dat_f_age_proj <- dat_f_age_prep %>% 
+  filter(year %in% years_proj) %>%
+  bind_rows(dat_f_age %>% filter(year==max(year))) # need final year of training data to initialize projection
 
 lbins <- unique(length_at_age_key$length_bin)
 n_lbins <- length(lbins) 
@@ -288,9 +201,7 @@ n_lbins <- length(lbins)
 n_ages <- nrow(l_at_a_mat)
 
 # now that we have n_ages, calculate weight at age
-# THIS IS VERY HARD CODED, AND ALSO NOT PROBABILISTIC
-# NEED TO FIX
-wt_at_age_prep <- read_csv(here("processed-data","summer_flounder_wt_at_age.csv")) %>% 
+wt_at_age_prep <- wt_at_age_raw %>% 
   filter(!Age %in% seq(7, 10, 1)) %>% 
   mutate(Age = gsub("over7",7,Age),
          Age = as.numeric(Age),
@@ -309,15 +220,14 @@ wt_at_age <- rbind(wt_at_age_prep, wt_at_age_add)$wt
 dat_train_dens$year = as.integer(as.factor(dat_train_dens$year))
 dat_test_dens$year = as.integer(as.factor(dat_test_dens$year))
 dat_train_lengths$year = as.integer(as.factor(dat_train_lengths$year))
-#dat_test_lengths$year = as.integer(as.factor(dat_test_lengths$year))
+dat_test_lengths$year = as.integer(as.factor(dat_test_lengths$year))
 dat_test_sbt$year= as.integer(as.factor(dat_test_sbt$year))
 dat_train_sbt$year= as.integer(as.factor(dat_train_sbt$year))
-if(time_varying_f==TRUE){
-  dat_f_age$year = as.integer(as.factor(dat_f_age$year))
-  dat_f_age_proj$year = as.integer(as.factor(dat_f_age_proj$year))
-}
+dat_f_age$year = as.integer(as.factor(dat_f_age$year))
+dat_f_age_proj$year = as.integer(as.factor(dat_f_age_proj$year))
 
-# make matrices/arrays from dfs
+# reshape all data for Stan 
+# make matrices/arrays from dfs -- slow 
 len <- array(0, dim = c(np, n_lbins, ny)) 
 for(p in 1:np){
   for(l in 1:n_lbins){
@@ -336,7 +246,8 @@ dens <- array(NA, dim=c(np, ny))
 for(p in 1:np){
   for(y in 1:ny){
     tmp2 <- dat_train_dens %>% filter(patch==p, year==y) 
-    dens[p,y] <- tmp2$mean_dens * (1/0.0384) * meanpatcharea
+    patcharea_p <- area[p]
+    dens[p,y] <- tmp2$mean_dens * (1/0.0384) * patcharea_p
     # converting fish/tow to fish
     # mean counts (in fish/tow) * tows/km2 * km2 ==> fish 
   }
@@ -362,23 +273,17 @@ for(p in 1:np){
 f <- array(NA, dim=c(n_ages,ny))
 for(a in min_age:max_age){
   for(y in 1:ny){
-    if(time_varying_f==TRUE){
-      tmp4 <- dat_f_age %>% filter(age==a, year==y) 
-      f[a+1,y] <- tmp4$f # add 1 because matrix indexing starts at 1 not 0
-    } else{
-      f[a+1,y] <- f_prep
-    }
-  }
+    tmp4 <- dat_f_age %>% filter(age==a, year==y) 
+    f[a+1,y] <- tmp4$f # add 1 because matrix indexing starts at 1 not 0
+  } 
 }
+
 f_proj <- array(NA, dim=c(n_ages,(ny_proj+1)))
 for(a in min_age:max_age){
   for(y in 1:(ny_proj+1)){
-    if(time_varying_f==TRUE){
-      tmp5 <- dat_f_age_proj %>% filter(age==a, year==y) 
-      f_proj[a+1,y] <- tmp5$f # add 1 because matrix indexing starts at 1 not 0
-    } else{
-      f_proj[a+1,y] <-f_prep
-    }
+    tmp5 <- dat_f_age_proj %>% filter(age==a, year==y) 
+    f_proj[a+1,y] <- tmp5$f # add 1 because matrix indexing starts at 1 not 0
+    
   }
 }
 
@@ -386,12 +291,12 @@ a <- seq(min_age, max_age)
 
 check <- a %*% l_at_a_mat
 
-bin_mids=lbins+0.5 # also not sure if this is the right way to calculate the midpoints
+bin_mids=lbins+0.5 
 
 save(
   dat_train_dens,
   dat_test_dens,
-  meanpatcharea,
+  area,
   np,
   n_ages,
   ny,

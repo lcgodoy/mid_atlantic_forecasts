@@ -1,7 +1,8 @@
-# this script extracts F values from PDFs from the summer flounder stock assessment 
-# while tabulizer is great, please actually check the outputs against the PDFs!
+#################
+# This script extracts F values from PDFs from the summer flounder stock assessment 
+# While tabulizer is great, please actually check the outputs against the PDFs!
 library(tidyverse)
-library(tabulizer)
+library(tabulizer) 
 library(here)
 
 # from SAW66 p239: "Table A88. 2018 SAW 66 assessment fishing mortality (F) estimates at age; F2018_BASE_V2 model run."
