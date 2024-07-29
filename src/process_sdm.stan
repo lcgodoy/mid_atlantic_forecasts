@@ -88,7 +88,7 @@ functions {
     return quant_position;
   } // close quantile function
   
-/**
+  /**
  * Run the population model forward in time given temperature etc. Return
  * numbers at age by patch for each year
  * @param np number of patches
@@ -139,6 +139,10 @@ functions {
   real r0, vector maturity_at_age,
   vector wt_at_age, real alpha, real h,
   real ssb0, vector d_at_age,
+  matrix l_at_a_key,
+  vector selectivity_at_bin,
+  real beta_obs_int, real beta_obs,
+  int number_quantiles,
   matrix init_n_at_age,
   int use_init_n_at_age) {
     //// define variables ////
@@ -950,4 +954,3 @@ generated quantities {
   } // close run_forecast
 }
 // close generated quantities run_forecast
-
