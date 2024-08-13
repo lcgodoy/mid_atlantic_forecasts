@@ -909,15 +909,13 @@ generated quantities {
     // AR process
     if (process_error_toggle) {
       rec_proj = sigma_r[1] * raw_proj;
-      for (tp in 1:ny_proj) {
-        if (tp == 1) {
-          // uses the last timepoint from the train in the AR evolution. In the
-          // previous version, the "history" of the AR process was ignored at
-          // the time of the projection
-          lagged_rec_proj[tp] = sigma_r[1] * raw[ny_train];
-        } else {
-          lagged_rec_proj[tp] = rec_proj[tp - 1];
-        }
+      lagged_rec_proj[1] = sigma_r[1] * raw[ny_train];
+      rec_proj[1] += alpha[1] * lagged_rec_proj[1];
+      for (tp in 2:(ny_proj + 1)) {
+        // uses the last timepoint from the train in the AR evolution. In the
+        // previous version, the "history" of the AR process was ignored at
+        // the time of the projection
+        lagged_rec_proj[tp] = rec_proj[tp - 1];
         rec_proj[tp] += alpha[1] * lagged_rec_proj[tp];
       }
     } else {
