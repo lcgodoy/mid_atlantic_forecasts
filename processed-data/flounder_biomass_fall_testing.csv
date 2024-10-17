@@ -101,6 +101,7 @@ Northeast US Fall,200709-163-1090,2007,Paralichthys dentatus,6.14,40.976632,-70.
 Northeast US Fall,200709-164-1050,2007,Paralichthys dentatus,2.84,40.896722,-71.18749,52,10.93
 Northeast US Fall,200709-165-1060,2007,Paralichthys dentatus,0,40.687848,-71.806842,56,10.83
 Northeast US Fall,200709-167-1060,2007,Paralichthys dentatus,0,40.54419,-71.550362,71,NA
+Northeast US Fall,200709-168-1060,2007,Paralichthys dentatus,0,40.180408,-71.588753,85,9.53
 Northeast US Fall,200709-169-1060,2007,Paralichthys dentatus,0,40.034665,-71.752742,94,9.57
 Northeast US Fall,200709-170-1080,2007,Paralichthys dentatus,0,39.949983,-71.390547,249,9.67
 Northeast US Fall,200709-171-1060,2007,Paralichthys dentatus,0,40.146568,-71.384287,91,9.27
@@ -227,16 +228,20 @@ Northeast US Fall,200709-300-1360,2007,Paralichthys dentatus,0,43.486048,-67.485
 Northeast US Fall,200709-301-1360,2007,Paralichthys dentatus,0,43.730417,-67.481707,232,7.37
 Northeast US Fall,200709-302-1340,2007,Paralichthys dentatus,0,43.94405,-67.179682,138,7.12
 Northeast US Fall,200709-303-1340,2007,Paralichthys dentatus,0,43.824817,-66.99879,187,7.09
+Northeast US Fall,200709-306-1340,2007,Paralichthys dentatus,0,44.020753,-66.747283,115,7.52
 Northeast US Fall,200709-309-1360,2007,Paralichthys dentatus,0,44.104922,-67.417217,193,7.1
 Northeast US Fall,200709-310-1390,2007,Paralichthys dentatus,0,44.284255,-67.655027,89,8.35
 Northeast US Fall,200709-311-1390,2007,Paralichthys dentatus,0,44.236818,-67.844473,86,9.41
 Northeast US Fall,200709-312-1380,2007,Paralichthys dentatus,0,44.025922,-67.891752,118,7.91
 Northeast US Fall,200709-313-1390,2007,Paralichthys dentatus,0,43.86712,-68.458383,124,8.15
+Northeast US Fall,200709-314-1390,2007,Paralichthys dentatus,0,43.846807,-68.602242,110,8.63
 Northeast US Fall,200709-315-1390,2007,Paralichthys dentatus,0,43.79928,-68.650473,107,8.27
 Northeast US Fall,200709-316-1400,2007,Paralichthys dentatus,0,43.76082,-69.39164,89,8.76
+Northeast US Fall,200709-317-1400,2007,Paralichthys dentatus,0,43.51361,-69.916478,117,7.58
 Northeast US Fall,200709-318-1270,2007,Paralichthys dentatus,0,43.31028,-70.100993,136,5.76
 Northeast US Fall,200709-319-1400,2007,Paralichthys dentatus,0,42.954838,-70.447473,103,5.95
 Northeast US Fall,200709-323-1260,2007,Paralichthys dentatus,0,42.491132,-70.534385,64,7.04
+Northeast US Fall,200709-329-1250,2007,Paralichthys dentatus,0,41.887715,-69.85136,61,7.69
 Northeast US Fall,200709-336-1280,2007,Paralichthys dentatus,0,42.264482,-69.69646,244,6.64
 Northeast US Fall,200709-337-1280,2007,Paralichthys dentatus,0,42.34235,-69.77106,256,6.7
 Northeast US Fall,200709-338-1260,2007,Paralichthys dentatus,0,42.357577,-70.332402,27,11.51
@@ -263,6 +268,7 @@ Northeast US Fall,200807-009-1040,2008,Paralichthys dentatus,0,39.139593,-72.637
 Northeast US Fall,200807-010-1030,2008,Paralichthys dentatus,0,39.191555,-72.672045,130,NA
 Northeast US Fall,200807-011-1750,2008,Paralichthys dentatus,0,39.107917,-72.84242,94,NA
 Northeast US Fall,200807-012-1740,2008,Paralichthys dentatus,0,38.983558,-73.062797,78,NA
+Northeast US Fall,200807-013-1740,2008,Paralichthys dentatus,0,38.908153,-73.241738,73,NA
 Northeast US Fall,200807-014-1740,2008,Paralichthys dentatus,0,39.053842,-73.406062,57,NA
 Northeast US Fall,200807-015-1730,2008,Paralichthys dentatus,0,39.093772,-73.465895,53,NA
 Northeast US Fall,200807-016-1730,2008,Paralichthys dentatus,0,39.183687,-73.743958,38,NA
@@ -346,6 +352,7 @@ Northeast US Fall,200807-152-1060,2008,Paralichthys dentatus,0,40.562442,-72.080
 Northeast US Fall,200807-153-1050,2008,Paralichthys dentatus,14.6,40.851578,-71.783597,46,NA
 Northeast US Fall,200807-155-3020,2008,Paralichthys dentatus,7.62,41.086117,-71.661648,36,NA
 Northeast US Fall,200807-156-1050,2008,Paralichthys dentatus,2.1,40.988442,-71.506067,48,NA
+Northeast US Fall,200807-161-1050,2008,Paralichthys dentatus,20.1,40.980483,-71.117492,49,12.61
 Northeast US Fall,200807-162-1050,2008,Paralichthys dentatus,4.4,40.897473,-70.822988,50,NA
 Northeast US Fall,200807-163-1090,2008,Paralichthys dentatus,6.84,40.901378,-70.590502,52,NA
 Northeast US Fall,200807-164-1090,2008,Paralichthys dentatus,18.1,40.706023,-70.43818,52,NA

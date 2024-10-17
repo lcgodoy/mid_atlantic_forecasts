@@ -54,35 +54,28 @@ min_yr <- 1972 # early years have some issues; the newly filtered OA data starts
 # to explore more the changes in samplng over time, make annual maps of haul locations, or a tile plot of year vs. lat band 
 forecast_yr_1 <- max_yr - 9
 
-# trim to only hauls that we know were close to standard length (30min), which we use for the CPUE conversion 
-# sensu https://github.com/afredston/marine_heatwaves_trawl/blob/main/prep_trawl_data.R#L55
+# create haulid column
+
 towdur <- towdur_raw %>% 
   filter(!STATION %in% c('8093','7046')) %>% 
   mutate(
-  CRUISE6 = as.character(CRUISE6), 
-  STATION = str_sub(STATION, start=2, end=4),
-  STRATUM = str_sub(STRATUM, start=2, end=5), # QA/QC up to this point is just to make the haulid consistent with the other NEUS dataframe haulids 
-  haulid = paste(formatC(CRUISE6, width=6, flag=0), formatC(STATION, width=3, flag=0), formatC(STRATUM, width=4, flag=0), sep='-')) %>% 
-  select(haulid, TOWDUR, EST_YEAR) %>% 
-  mutate(haul_dur = TOWDUR / 60) %>% 
-  rename(
-    year = EST_YEAR) %>% 
-  mutate(flag = case_when(
-    year < 2009 & haul_dur < 0.42 ~ "drop",
-    year < 2009 & haul_dur > 0.58 ~ "drop",
-    year >= 2009 & haul_dur < 0.25 ~ "drop",
-    year >= 2009 & haul_dur > 0.42 ~ "drop",
-    haul_dur == NA ~ "drop",
-    .default = "keep"
-  )) 
+    CRUISE6 = as.character(CRUISE6), 
+    STATION = str_sub(STATION, start=2, end=4),
+    STRATUM = str_sub(STRATUM, start=2, end=5), # QA/QC up to this point is just to make the haulid consistent with the other NEUS dataframe haulids 
+    haulid = paste(formatC(CRUISE6, width=6, flag=0), formatC(STATION, width=3, flag=0), formatC(STRATUM, width=4, flag=0), sep='-')) %>% 
+  select(haulid, TOWDUR, EST_YEAR) 
 
-towdur %>% group_by(flag) %>% summarise(n=n()) # drops 174 of 19102 hauls, ie <1%  
+# figure out which hauls are missing duration, so we can test whether their CPUE is different later on 
+hauls_without_duration <- towdur %>% 
+  filter(is.na(TOWDUR)) %>% 
+  pull(haulid)
 
-towdur <- towdur %>% 
-  filter(flag == 'keep') 
+hauls_with_duration <- towdur %>% 
+  filter(!is.na(TOWDUR)) %>% 
+  pull(haulid)
 
 dat_exploded_neus <- dat_exploded_neus %>% 
-  filter(haulid %in% unique(towdur$haulid)) # drop hauls that are an irregular duration 
+  filter(haulid %in% unique(towdur$haulid)) # drop any bad hauls
 
 # creating a separate haul info dataframe to get the date and btemp
 hauldat <- survdat %>% 
@@ -131,6 +124,10 @@ bio_flounder <- dat_exploded_neus %>%
   filter(spp == spp_of_interest) %>% 
   select(-common, -stratum, -stratumarea) %>%
   left_join(hauldat %>% select(haulid, btemp), by="haulid")
+
+# test differences in CPUE if haul duration column is missing
+quantile(filter(bio_flounder, haulid %in% hauls_with_duration)$wtcpue, probs=c(0.05, 0.25, 0.5, 0.75, 0.95))
+quantile(filter(bio_flounder, haulid %in% hauls_without_duration)$wtcpue, probs=c(0.05, 0.25, 0.5, 0.75, 0.95)) # extremely similar -- OK to pool all of them 
 
 # split all into training/testing and save 
 abund_len_flounder_train <- len_flounder %>% 
