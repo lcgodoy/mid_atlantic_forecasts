@@ -25,17 +25,18 @@ sapply(funs, function(x)
 quantiles_calc <- c(0.05, 0.5, 0.95)
 quantiles_calc <- c(0.95, 0.95, 0.95)
 
-ctrl_file <- read_csv("control_file.csv")
-ctrl_file <- read_csv("control_file.csv") %>%
-  filter(
-    eval_l_comps == 0,
-    spawner_recruit_relationship == 1,
-    process_error_toggle == 1,
-    known_f == 0,
-    T_dep_mortality == 0
-  ) |>
-  ungroup() |>
-  slice(1)
+ctrl_file <- read_csv("control_file.csv") %>% 
+  filter(process_error_toggle == 1)
+# ctrl_file <- read_csv("control_file.csv") %>%
+#   filter(
+#     eval_l_comps == 0,
+#     spawner_recruit_relationship == 1,
+#     process_error_toggle == 1,
+#     known_f == 0,
+#     T_dep_mortality == 0
+#   ) |>
+#   ungroup() |>
+#   slice(1)
 
 fit_drms <- TRUE
 use_poisson_link <- 0
@@ -46,13 +47,13 @@ if (use_poisson_link){
 }
 make_plots <- TRUE
 write_summary <- TRUE
-iters <- 2000
-warmups <- 1000
+iters <- 5000
+warmups <- 2000
 chains <- 4
 cores <- 4
 
-ctrl_file <- ctrl_file |> 
-  slice(1)
+# ctrl_file <- ctrl_file |> 
+#   slice(1)
 
 load(here("processed-data","stan_data_prep.Rdata"))
 
