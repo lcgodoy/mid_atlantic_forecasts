@@ -11,7 +11,7 @@ library(Matrix)
 library(rstanarm)
 library(cmdstanr)
 library(data.table)
-
+set.seed(424242)
 rstan_options(javascript = FALSE, auto_write = TRUE)
 
 # load fit_drm function 
@@ -21,21 +21,40 @@ sapply(funs, function(x)
   source(file.path("functions", x)))
 
 # which range edges should be calculated?
+#  
 quantiles_calc <- c(0.05, 0.5, 0.95)
-ctrl_file <- read_csv("control_file.csv") 
-# ctrl_file <- read_csv("control_file.csv") %>%
-#   filter(eval_l_comps==0,
-#          spawner_recruit_relationship==1,
-#          process_error_toggle==1,
-#          known_f==1
-#          )
+quantiles_calc <- c(0.95, 0.95, 0.95)
+
+ctrl_file <- read_csv("control_file.csv")
+ctrl_file <- read_csv("control_file.csv") %>%
+  filter(
+    eval_l_comps == 0,
+    spawner_recruit_relationship == 1,
+    process_error_toggle == 1,
+    known_f == 0,
+    T_dep_mortality == 0
+  ) |>
+  ungroup() |>
+  slice(1)
+
 fit_drms <- TRUE
-make_plots <- FALSE
+use_poisson_link <- 0
+if (use_poisson_link){
+  run_name <- "yes-pois"
+} else {
+  run_name <- "no-pois"
+}
+make_plots <- TRUE
 write_summary <- TRUE
-iters <- 5000
-warmups <- 2000
+iters <- 2000
+warmups <- 1000
 chains <- 4
 cores <- 4
+
+ctrl_file <- ctrl_file |> 
+  slice(1)
+
+load(here("processed-data","stan_data_prep.Rdata"))
 
 for(k in 1:nrow(ctrl_file)){
   i = ctrl_file$id[k]  
@@ -50,8 +69,9 @@ for(k in 1:nrow(ctrl_file)){
     
     drm_fits$fits <- list(tryCatch(fit_drm(
       amarel = FALSE,
+      use_poisson_link = use_poisson_link,
       create_dir = TRUE,
-      run_name = drm_fits$id,
+      run_name = run_name,
       do_dirichlet = drm_fits$do_dirichlet,
       eval_l_comps = drm_fits$eval_l_comps,
       T_dep_movement = drm_fits$T_dep_movement,
@@ -75,17 +95,45 @@ for(k in 1:nrow(ctrl_file)){
     
     
   } # close fit_drms 
+}
+
+diagnostic_fit <- read_rds(here("results",run_name, "stan_model_fit.rds"))
+
+diagnostic_fit$diagnostic_summary()
+
+test <- tidybayes::spread_draws(diagnostic_fit, density_hat[patch,year],theta[patch,year], ndraws  =100)
+
+load(here("processed-data","stan_data_prep.Rdata"))
+
+
+  # visualize abundance over time
+  abund_p_y <-  dat_train_dens %>%
+    mutate(abundance = mean_dens * meanpatcharea)
   
-  # would be more efficient to do this above without having to load in the model 
-  if(write_summary==TRUE){
-    
-    tmp_model <-  tryCatch(read_rds(file.path(results_path, "stan_model_fit.rds")))
-    # may want to add in rhat metrics later, but those are per parameter
-    #   https://mc-stan.org/cmdstanr/articles/cmdstanr.html 
-    
-    diagnostic_ls <- tryCatch(c(list(num_chains = chains, num_cores = cores, num_iters = iters, num_warmups = warmups), tmp_model$diagnostic_summary()))
-    tryCatch(saveRDS(diagnostic_ls, file = file.path(results_path,"diagnostics.rds"))    )
-    
-  } # close summary 
-} # close loop over models
+  test <- test |> 
+    mutate(predicted_abundance = density_hat * theta) |> 
+    left_join(abund_p_y, by = c("patch", "year"))
+  
+  
+  test |> 
+    ggplot(aes(abundance, predicted_abundance / 10)) + 
+    geom_point(alpha = 0.25) + 
+    geom_abline(slope = 1, intercept = 0, color = "red") + 
+    geom_smooth(method = "lm") + 
+    scale_x_continuous("Observed Number Density") + 
+    scale_y_continuous(name = "Probability of occurance * Predicted Number Density") + 
+    theme_minimal()
+  
+  
+  abund_p_y_hat <- tidybayes::spread_draws(diagnostic_fit, density_hat[patch,year], ndraws  =100)
+  
+  abundance_v_time <- abund_p_y_hat %>%
+    ggplot(aes(year, density_hat)) +
+    stat_lineribbon() +
+    geom_point(data = abund_p_y, aes(year, abundance), color = "red") +
+    facet_wrap(~patch, scales = "free_y") +
+    labs(x="Year",y="Abundance", fill="Probability") +
+    scale_fill_brewer()
+  
+  abundance_v_time
 
