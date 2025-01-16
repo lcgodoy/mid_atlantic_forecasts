@@ -40,11 +40,11 @@ ctrl_file <- read_csv("control_file.csv") %>%
 
 fit_drms <- TRUE
 use_poisson_link <- 0
-if (use_poisson_link){
-  run_name <- "yes-pois"
-} else {
-  run_name <- "no-pois"
-}
+# if (use_poisson_link){
+#   run_name <- "yes-pois"
+# } else {
+#   run_name <- "no-pois"
+# }
 make_plots <- TRUE
 write_summary <- TRUE
 iters <- 5000
@@ -72,7 +72,7 @@ for(k in 1:nrow(ctrl_file)){
       amarel = FALSE,
       use_poisson_link = use_poisson_link,
       create_dir = TRUE,
-      run_name = run_name,
+      run_name = drm_fits$id,
       do_dirichlet = drm_fits$do_dirichlet,
       eval_l_comps = drm_fits$eval_l_comps,
       T_dep_movement = drm_fits$T_dep_movement,
