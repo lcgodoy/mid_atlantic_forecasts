@@ -72,7 +72,6 @@ for(k in 1:nrow(ctrl_file)){
       filter(id == i)
     
     drm_fits$fits <- list(tryCatch(fit_drm(
-      amarel = FALSE,
       use_poisson_link = use_poisson_link,
       create_dir = TRUE,
       run_name = drm_fits$id,
