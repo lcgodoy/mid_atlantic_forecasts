@@ -615,7 +615,7 @@ parameters {
   
   real log_r0;
 
-  array[T_dep_mortality] real<lower = 0, 0.25> est_m; // used in place of `m`
+  array[T_dep_mortality] real<lower = 0, upper = 0.25> est_m; // used in place of `m`
                                                       // when T_dep_mortality is
                                                       // on
   array[T_dep_mortality] real<lower = 0> m_e; // excess of mortality due temperature

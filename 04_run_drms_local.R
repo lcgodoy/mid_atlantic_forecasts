@@ -26,7 +26,10 @@ quantiles_calc <- c(0.05, 0.5, 0.95)
 quantiles_calc <- c(0.95, 0.95, 0.95)
 
 ctrl_file <- read_csv("control_file.csv") %>% 
-  filter(process_error_toggle == 1)
+  filter(process_error_toggle == 1, 
+         eval_l_comps == 0,
+         known_f == 1,
+         spawner_recruit_relationship == 0)
 # ctrl_file <- read_csv("control_file.csv") %>%
 #   filter(
 #     eval_l_comps == 0,
