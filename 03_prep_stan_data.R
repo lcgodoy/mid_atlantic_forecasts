@@ -3,7 +3,6 @@
 # It is hard-coded by nature and would need to be substantially revised for new species 
 
 set.seed(42)
-library(sf) # for getting patch areas 
 library(tidyverse)
 library(here)
 library(lme4) # used for interpolating a few temperature values
@@ -33,7 +32,6 @@ length_50_sel_guess= 20
 age_sel= 0
 sel_100 = 3 # this is actually age 2, but we start counting ages at 0 (recruits), hence the 3 passed to Stan here 
 h = 0.8
-use_constant_patch_area <- TRUE 
 
 # the f-at-age data starts in 1982; fill in the previous years with the earliest year of data
 f_early <- expand_grid(year=seq(1972, 1981, 1), age=unique(dat_f_age_prep$age)) %>% 
@@ -95,44 +93,6 @@ years <- sort(unique(dat_train_lengths$year))
 years_proj <- sort(unique(dat_test_lengths$year))
 ny <- length(years)
 ny_proj <- length(years_proj)
-
-# get patch area
-patchdat_prep <- dat %>%
-  select(year, lat, lon) %>%
-  distinct() %>%
-  mutate(lat_floor = floor(lat)) %>%
-  filter(lat_floor %in% patches)
-
-patchareas <- NULL
-for(i in 1:np){
-  tmp <- patchdat_prep %>% 
-    filter(lat_floor == patches[i]) %>% 
-    distinct()
-  
-  plot(tmp$lon, tmp$lat)
-  
-  polygon <- st_as_sf(tmp, coords = c("lon", "lat"), crs = 4326) %>%  summarise() %>%  st_concave_hull(., ratio=0.3) # ratio tunes how tightly to fit the polygon around the points; examine plots to be sure this reflects the outline of the points well 
-  
-  plot(polygon)
-  
-  area <- st_area(polygon)
-  patchareas <- rbind(patchareas, data.frame(patch = i, area_m2 = area))
-}
-
-patchareas <- patchareas %>% 
-  mutate(area_km2 = as.numeric(area_m2 / 1e6), .keep="unused")
-
-# we are using a fixed patch size but leaving in the code to let it vary 
-if(use_constant_patch_area==FALSE){
-  
-  patchareas$lat_floor <- patches
-  
-  patcharea <- patchareas$area_km2
-}else{
-  
-  patchareas$area_km2 <- mean(patchareas$area_km2)
-  patcharea <- mean(patchareas$area_km2)
-}
 
 # get temperature data
 dat_train_sbt <- dat %>%   
@@ -251,27 +211,15 @@ for(p in 1:np){
 # plot(len[4,,20])
 
 dens <- array(NA, dim=c(np, ny))
-if(use_constant_patch_area==FALSE){
+
   for(p in 1:np){
     for(y in 1:ny){
       tmp2 <- dat_train_dens %>% filter(patch==p, year==y) 
-      patcharea_p <- patcharea[p]
-      dens[p,y] <- tmp2$mean_dens * (1/0.0384) * patcharea_p
-      # converting fish/tow to fish
-      # mean counts (in fish/tow) * tows/km2 * km2 ==> fish 
-    }
+      dens[p,y] <- tmp2$mean_dens #  * (1/0.0384) * patcharea
+      # previously converting fish/tow to fish, mean counts (in fish/tow) * tows/km2 * km2 ==> fish 
+    # now just modeling densities in the net 
+      }
   }
-}
-if(use_constant_patch_area==TRUE){
-  for(p in 1:np){
-    for(y in 1:ny){
-      tmp2 <- dat_train_dens %>% filter(patch==p, year==y) 
-      dens[p,y] <- tmp2$mean_dens * (1/0.0384) * patcharea
-      # converting fish/tow to fish
-      # mean counts (in fish/tow) * tows/km2 * km2 ==> fish 
-    }
-  }
-}
 
 sbt <- array(NA, dim=c(np,ny))
 for(p in 1:np){
@@ -316,7 +264,6 @@ bin_mids=lbins+0.5
 save(
   dat_train_dens,
   dat_test_dens,
-  patcharea,
   np,
   n_ages,
   ny,
