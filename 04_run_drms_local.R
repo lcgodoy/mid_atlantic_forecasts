@@ -26,7 +26,10 @@ quantiles_calc <- c(0.05, 0.5, 0.95)
 quantiles_calc <- c(0.95, 0.95, 0.95)
 
 ctrl_file <- read_csv("control_file.csv") %>% 
-  filter(process_error_toggle == 1)
+  filter(process_error_toggle == 1, 
+         eval_l_comps == 0,
+         known_f == 1,
+         spawner_recruit_relationship == 0)
 # ctrl_file <- read_csv("control_file.csv") %>%
 #   filter(
 #     eval_l_comps == 0,
@@ -69,7 +72,6 @@ for(k in 1:nrow(ctrl_file)){
       filter(id == i)
     
     drm_fits$fits <- list(tryCatch(fit_drm(
-      amarel = FALSE,
       use_poisson_link = use_poisson_link,
       create_dir = TRUE,
       run_name = drm_fits$id,

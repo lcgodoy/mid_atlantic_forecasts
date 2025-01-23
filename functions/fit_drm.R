@@ -1,71 +1,69 @@
-fit_drm <- function(amarel = FALSE,
-                    run_name = "test",
-                    results_path = file.path("results", run_name),
-                    create_dir = TRUE,
-                    use_poisson_link = 0,
-                    do_dirichlet = 1,
-                    eval_l_comps = 0,
-                    T_dep_mortality = 0,
-                    T_dep_recruitment = 0,
-                    T_dep_movement = 0,
-                    spawner_recruit_relationship = 1,
-                    run_forecast = 0,
-                    process_error_toggle = 1,
-                    exp_yn = 0,
-                    warmup = 1000,
-                    iter = 2000,
-                    max_treedepth =  10,
-                    chains =  1,
-                    refresh = 10,
-                    cores = 1,
-                    adapt_delta = 0.95, 
-                    drm_name = "process_sdm",
-                    number_quantiles = 3,
-                    quantiles_calc = c(0.05, 0.5, 0.95),
-                    known_f = 0,
-                    known_historic_f = 1,
-                    #          cv = 0.1, # replaced by pr_sigma_obs_sigma, below 
-                    h = 0.8,
-                    dcap = 1 / 3, 
-                    # all priors that Stan needs for parameter estimation 
-                    pr_init_dep_alpha = 1.5,
-                    pr_init_dep_beta = 3,
-                    pr_beta_obs_mu = 0.001,
-                    pr_beta_obs_sigma = 0.1,
-                    pr_beta_obs_int_mu = -100,
-                    pr_beta_obs_int_sigma = 4,
-                    pr_raw_mu = 0,
-                    pr_raw_sigma = 1,
-                    pr_sigma_r_raw_mu = .2,
-                    pr_sigma_r_raw_sigma = .1,
-                    pr_sigma_obs_mu = 0.2, 
-                    pr_sigma_obs_sigma = 0.2, # formerly "cv" / "sigma_obs_cv"
-                    pr_log_mean_recruits_mu = 7,
-                    pr_log_mean_recruits_sigma = 5,
-                    pr_log_r0_mu = 15,
-                    pr_log_r0_sigma = 5,
-                    pr_Topt_mu = 18 ,
-                    pr_Topt_sigma = 2,
-                    pr_width_mu = 4,
-                    pr_width_sigma = 2,
-                    pr_beta_t_mu = 0,
-                    pr_beta_t_sigma = 2,
-                    pr_beta_rec_mu = 0,
-                    pr_beta_rec_sigma = 2,
-                    pr_alpha_alpha = 12, # concentrated around 0.4
-                    pr_alpha_beta = 20, # concentrated around 0.4
-                    pr_d_mu = 0.1, # diffusion rate as a proportion of total population size within the patch
-                    pr_d_sigma = 0.1,
-                    pr_p_length_50_sel_sigma = .2, # note that there is no mu prior for this parameter passed in because it's calculated in the code from length_50_sel_guess and loo 
-                    pr_sel_delta_mu = 2,
-                    pr_sel_delta_sigma = 4,
-                    pr_theta_d_mu = 0.5,
-                    pr_theta_d_sigma = 0.5
+fit_drm <- function(
+    run_name = "test",
+    results_path = file.path("results", run_name),
+    create_dir = TRUE,
+    use_poisson_link = 0,
+    do_dirichlet = 1,
+    eval_l_comps = 0,
+    T_dep_mortality = 0,
+    T_dep_recruitment = 0,
+    T_dep_movement = 0,
+    spawner_recruit_relationship = 1,
+    run_forecast = 0,
+    process_error_toggle = 1,
+    exp_yn = 0,
+    warmup = 1000,
+    iter = 2000,
+    max_treedepth =  10,
+    chains =  1,
+    refresh = 10,
+    cores = 1,
+    adapt_delta = 0.95, 
+    drm_name = "process_sdm",
+    number_quantiles = 3,
+    quantiles_calc = c(0.05, 0.5, 0.95),
+    known_f = 0,
+    known_historic_f = 1,
+    #          cv = 0.1, # replaced by pr_sigma_obs_sigma, below 
+    h = 0.8,
+    dcap = 1 / 3, 
+    # all priors that Stan needs for parameter estimation 
+    pr_init_dep_alpha = 1.5,
+    pr_init_dep_beta = 3,
+    pr_beta_obs_mu = 0.001,
+    pr_beta_obs_sigma = 0.1,
+    pr_beta_obs_int_mu = -100,
+    pr_beta_obs_int_sigma = 4,
+    pr_raw_mu = 0,
+    pr_raw_sigma = 1,
+    pr_sigma_r_raw_mu = .2,
+    pr_sigma_r_raw_sigma = .1,
+    pr_sigma_obs_mu = 0.2, 
+    pr_sigma_obs_sigma = 0.2, # formerly "cv" / "sigma_obs_cv"
+    pr_log_mean_recruits_mu = 7,
+    pr_log_mean_recruits_sigma = 5,
+    pr_log_r0_mu = 15,
+    pr_log_r0_sigma = 5,
+    pr_Topt_mu = 18 ,
+    pr_Topt_sigma = 2,
+    pr_width_mu = 4,
+    pr_width_sigma = 2,
+    pr_beta_t_mu = 0,
+    pr_beta_t_sigma = 2,
+    pr_beta_rec_mu = 0,
+    pr_beta_rec_sigma = 2,
+    pr_alpha_alpha = 12, # concentrated around 0.4
+    pr_alpha_beta = 20, # concentrated around 0.4
+    pr_d_mu = 0.1, # diffusion rate as a proportion of total population size within the patch
+    pr_d_sigma = 0.1,
+    pr_p_length_50_sel_sigma = .2, # note that there is no mu prior for this parameter passed in because it's calculated in the code from length_50_sel_guess and loo 
+    pr_sel_delta_mu = 2,
+    pr_sel_delta_sigma = 4,
+    pr_theta_d_mu = 0.5,
+    pr_theta_d_sigma = 0.5,
+    pr_est_m_sigma = 0.1, # there is no mu for est_m because we just use m 
+    pr_m_e_pg1 = 0.1
 ) {
-  if (amarel == TRUE) {
-    dyn.load('/projects/community/gcc/9.2.0/gc563/lib64/libgfortran.so.5')
-    
-  }
   
   if (create_dir == TRUE) {
     if (!dir.exists(results_path)) {
@@ -73,15 +71,7 @@ fit_drm <- function(amarel = FALSE,
     }
   }
   
-  if (amarel == FALSE) {
-    load(here::here("processed-data", "stan_data_prep.Rdata"))
-  }
-  
-  if (amarel == TRUE) {
-    load(
-      '/home/fredston/mid_atlantic_forecasts/processed-data/stan_data_prep.Rdata'
-    )
-  }
+  load(here::here("processed-data", "stan_data_prep.Rdata"))
   
   # by default f is a time-varying instantaneous rate 
   # if we want to turn that off: 
@@ -110,8 +100,8 @@ fit_drm <- function(amarel = FALSE,
     n_lbins = n_lbins,
     n_at_length = len,
     dens = dens,
-   #  area = area, 
-  #  area =  matrix(1, nrow = nrow(dens), ncol = ncol(dens)),
+    #  area = area, 
+    #  area =  matrix(1, nrow = nrow(dens), ncol = ncol(dens)),
     sbt = sbt,
     sbt_proj = sbt_proj,
     m = m,
@@ -174,19 +164,14 @@ fit_drm <- function(amarel = FALSE,
     pr_sel_delta_mu = pr_sel_delta_mu,
     pr_sel_delta_sigma = pr_sel_delta_sigma,
     pr_theta_d_mu = pr_theta_d_mu,
-    pr_theta_d_sigma = pr_theta_d_sigma
+    pr_theta_d_sigma = pr_theta_d_sigma, 
+    pr_est_m_sigma = pr_est_m_sigma, 
+    pr_m_e_pg1 = pr_m_e_pg1
   )
   nums <- 100 * exp(-.2 * (0:(n_ages - 1)))
   
-  if (amarel == FALSE) {
-    stan_file = here::here("src", paste0(drm_name, ".stan"))
-  }
+  stan_file = here::here("src", paste0(drm_name, ".stan"))
   
-  if (amarel == TRUE) {
-    stan_file = paste0('/home/fredston/mid_atlantic_forecasts/src/',
-                       drm_name,
-                       '.stan')
-  }
   drm_model <- cmdstan_model( here::here("src",paste0(drm_name, ".stan")))
   
   stan_model_fit = drm_model$sample(

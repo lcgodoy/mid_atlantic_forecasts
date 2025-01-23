@@ -615,7 +615,7 @@ parameters {
   
   real log_r0;
 
-  array[T_dep_mortality] real<lower = 0, 0.25> est_m; // used in place of `m`
+  array[T_dep_mortality] real<lower = 0, upper = 0.25> est_m; // used in place of `m`
                                                       // when T_dep_mortality is
                                                       // on
   array[T_dep_mortality] real<lower = 0> m_e; // excess of mortality due temperature
@@ -939,7 +939,10 @@ generated quantities {
     n_at_age_proj = simulate_population(np, ny_proj + 1, n_ages, n_lbins,
     age_at_maturity, sbt_proj, Topt,
     width, exp_yn, T_dep_mortality,
-    T_dep_movement, f_proj, m, d, beta_t,
+    T_dep_movement, f_proj,
+    T_dep_mortality ? est_m[1] : m,
+    T_dep_mortality ? m_e[1] : 0.0,
+    d, beta_t,
     T_dep_recruitment,
     spawner_recruit_relationship,
     init_dep, mean_recruits,// beta_rec,
