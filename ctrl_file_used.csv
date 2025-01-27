@@ -1,0 +1,5 @@
+id,description,do_dirichlet,eval_l_comps,T_dep_movement,T_dep_recruitment,T_dep_mortality,spawner_recruit_relationship,process_error_toggle,exp_yn,known_f,known_historic_f
+v0.13,"process error, known f",1,0,0,0,0,0,1,1,1,1
+v0.39,"process error, known f, temperature movement",1,0,1,0,0,0,1,0,1,1
+v0.40,"process error, known f, temperature recruitment",1,0,0,1,0,0,1,1,1,1
+v0.41,"process error, known f, temperature mortality",1,0,0,0,1,0,1,1,1,1

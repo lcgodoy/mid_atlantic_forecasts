@@ -100,8 +100,6 @@ fit_drm <- function(
     n_lbins = n_lbins,
     n_at_length = len,
     dens = dens,
-    #  area = area, 
-    #  area =  matrix(1, nrow = nrow(dens), ncol = ncol(dens)),
     sbt = sbt,
     sbt_proj = sbt_proj,
     m = m,
