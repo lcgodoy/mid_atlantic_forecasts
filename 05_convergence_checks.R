@@ -63,7 +63,7 @@ for(k in 1:nrow(ctrl_file)){
   
   dat <- data.frame(id = i,
     successful_chains = length(diagnostic_ls$num_divergent),
-                    mean_divergences = sum(diagnostic_ls$num_divergent) / num_iters_per_chain*length(diagnostic_ls$num_divergent),
+                    mean_divergences = sum(diagnostic_ls$num_divergent) / (num_iters_per_chain*length(diagnostic_ls$num_divergent)),
                     low_ebfmi = ifelse(mean(diagnostic_ls$ebfmi)<0.3, TRUE, FALSE))
   
   datalist[[k]] <- dat

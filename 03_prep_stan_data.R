@@ -75,9 +75,6 @@ dat_train_dens <- dat %>%
   ungroup() %>% 
   mutate(patch = as.integer(as.factor(lat_floor)))
 
-# dat_test_dens and dat_train_dens should not be used for calculating any range metrics because latitude is rounded down!! 
-# only for holding data to fit / compare models 
-
 dat_test_dens <- dat_test %>% 
   mutate(lat_floor = floor(lat)) %>% 
   filter(lat_floor %in% patches) %>% 

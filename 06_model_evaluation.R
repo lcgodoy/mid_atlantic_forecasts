@@ -12,16 +12,20 @@ library(magrittr)
 library(here)
 library(mgcv)
 library(tidybayes)
-library(ggrepel)
+library(ggrepel) # move plots to another script 
+#library(parallel)
+library(doParallel)
 # read in data 
 convergence_checks <- read_csv(file=here("results","convergence_checks.csv"))
-ctrl_file <- read_csv(file=here("control_file.csv"))
+ctrl_file <- read_csv(file=here("ctrl_file_used.csv"))
 dat <- read_csv(here("processed-data","flounder_catch_at_length_fall_training.csv"))
 dat_test <- read_csv(here("processed-data","flounder_catch_at_length_fall_testing.csv"))
 load(here("processed-data","stan_data_prep.Rdata"))
 quantiles_calc <- c(0.05, 0.5, 0.95)
+run_in_parallel <- TRUE
+if(run_in_parallel == TRUE) {  num_cores <- 40 }
 
-haul_km2_per_tow <- 0.0384 # conversion factor from hauls to km2; this is in units of km2/tow. 
+# haul_km2_per_tow <- 0.0384 # conversion factor from hauls to km2; this is in units of km2/tow. 
 # see: https://github.com/afredston/marine_heatwaves_trawl/blob/main/prep_trawl_data.R#L59 
 
 
@@ -56,22 +60,35 @@ calculate_range_edge <- function(patches, weights, q){
   } else {return(print("Length of patches and weights must be equal!"))}
 }
 
-# what actually happened to edge and centroid positions in the testing data?
-# need to keep aggregated at patch scale so we are comparing evenly across models 
-dat_test_patch <- dat_test_dens %>% 
-  left_join(data.frame(lat_floor = patches, area = area)) %>% 
-  # NEED TO CORRECT THE BELOW FOR REAL PATCH AREAS! 
+# calculate summary statistics on real data 
+dat_train_patch <- dat_train_dens %>% 
   group_by(year) %>% 
   summarise(
     warm_edge = calculate_range_edge(patches=lat_floor, weights=mean_dens, q=0.05),
     centroid = weighted.mean(lat_floor, w=mean_dens),
     cold_edge = calculate_range_edge(patches=lat_floor, weights=mean_dens, q=0.95),
-    abund = sum(mean_dens) * (1/haul_km2_per_tow) * meanpatcharea) %>% 
-  # convert to fish in patch: fish/tow * tow/km2 * km2
+    dens = mean(mean_dens)) %>% 
+  arrange(year) %>% 
+  mutate(year = year + min(years) - 1, 
+         dens_lr = log(dens / lag(dens))) %>% 
+  pivot_longer(cols=c(warm_edge:dens_lr), names_to="feature", values_to="value") 
+write_csv(dat_train_patch, file=here("processed-data","dat_train_patch.csv"))
+
+
+dat_test_patch <- dat_test_dens %>% 
+  group_by(year) %>% 
+  summarise(
+    warm_edge = calculate_range_edge(patches=lat_floor, weights=mean_dens, q=0.05),
+    centroid = weighted.mean(lat_floor, w=mean_dens),
+    cold_edge = calculate_range_edge(patches=lat_floor, weights=mean_dens, q=0.95),
+    dens = mean(mean_dens)) %>% 
   arrange(year) %>% 
   mutate(year = year + min(years_proj) - 1, 
-         abund_lr = log(abund / lag(abund))) %>% 
-  pivot_longer(cols=c(warm_edge:abund_lr), names_to="feature", values_to="value") 
+         dens_lr = log(dens / lag(dens))) %>% 
+  pivot_longer(cols=c(warm_edge:dens_lr), names_to="feature", values_to="value") 
+
+# note that one dens_lr value is missing; let's calculate it manually here 
+dat_test_patch[dat_test_patch$year==min(years_proj) & dat_test_patch$feature=="dens_lr",]$value <- log(dat_test_patch[dat_test_patch$year==min(years_proj) & dat_test_patch$feature=="dens",]$value / dat_train_patch[dat_train_patch$year==max(years) & dat_train_patch$feature=="dens",]$value)
 
 write_csv(dat_test_patch, file=here("processed-data","dat_test_patch.csv"))
 ###############
@@ -123,7 +140,6 @@ spdata_proj <- dat_test_gam %>%
 mypresmodtt<-formula(pres ~ s(btemp))
 myabunmodtt<-formula(logdens ~ s(btemp))
 
-# not sure if these are correct relative to how the source code worked, need to check 
 gammaPA <- log(nrow(spdata)) / 2
 gammaAbun <- log(nrow(spdata[spdata$pres==1,])) / 2
 
@@ -143,40 +159,27 @@ gam_out <- spdata_proj %>%
   mutate(lat_floor = floor(lat)) %>% 
   group_by(lat_floor, year) %>% 
   summarise(dens_pred = mean(exp(predstt)))# aggregate to patch scale for comparison to DRM 
-write_csv(gam_out, file = here("processed-data","gam_abundance_time.csv"))
+write_csv(gam_out, file = here("processed-data","gam_density_time.csv"))
 
 # calculate residuals by feature (centroid, edges) of forecast 
-gam_summary <- gam_out %>% 
+
+gam_time <- gam_out %>% 
   group_by(year) %>% # calculate summary stats 
   summarise(
     warm_edge = calculate_range_edge(patches=lat_floor, weights=dens_pred, q=0.05),
     centroid = weighted.mean(lat_floor, w=dens_pred),
     cold_edge = calculate_range_edge(patches=lat_floor, weights=dens_pred, q=0.95),
-    abund = sum(dens_pred) * (1/haul_km2_per_tow) * meanpatcharea) %>% 
-  # convert to fish in patch. units: fish/tow * tow/km2 * km2
+    dens = mean(dens_pred)) %>% 
   arrange(year) %>% 
-  mutate(abund_lr = log(abund / lag(abund))) %>% # note that this is technically the LR of change from 2007 to 2009 because the GAM doesn't use 2008
-  pivot_longer(cols=warm_edge:abund_lr, names_to="feature", values_to="value_tmp") %>% 
+  mutate(dens_lr = log(dens / lag(dens))) %>% # note that this is technically the LR of change from 2007 to 2009 because the GAM doesn't use 2008
+  pivot_longer(cols=warm_edge:dens_lr, names_to="feature", values_to="value_tmp") 
+
+gam_summary <- gam_time %>% 
   left_join(dat_test_patch)%>% # compare  to true data 
   mutate(resid = value_tmp - value, 
          resid_sq = resid^2, 
          .keep = "unused", # drop all the columns used in calculations 
          id = "GAM") 
-
-gam_time <- spdata_proj %>% 
-  mutate(lat_floor = floor(lat)) %>% 
-  group_by(lat_floor, year) %>% 
-  summarise(dens_pred = mean(exp(predstt))) %>% # aggregate to patch scale for comparison to DRM 
-  group_by(year) %>% # calculate summary stats 
-  summarise(
-    warm_edge = calculate_range_edge(patches=lat_floor, weights=dens_pred, q=0.05),
-    centroid = weighted.mean(lat_floor, w=dens_pred),
-    cold_edge = calculate_range_edge(patches=lat_floor, weights=dens_pred, q=0.95),
-    abund = sum(dens_pred) * (1/haul_km2_per_tow) * meanpatcharea) %>% 
-  # convert to fish in patch. units: fish/tow * tow/km2 * km2
-  arrange(year) %>% 
-  mutate(abund_lr = log(abund / lag(abund))) %>% # note that this is technically the LR of change from 2007 to 2009 because the GAM doesn't use 2008
-  pivot_longer(cols=warm_edge:abund_lr, names_to="feature", values_to="value_tmp") 
 
 ###############
 # MAKE PERSISTENCE FORECAST
@@ -188,15 +191,15 @@ persistence <- dat_train_dens %>%
     warm_edge = calculate_range_edge(patches=lat_floor, weights=mean_dens, q=0.05),
     centroid = weighted.mean(lat_floor, w=mean_dens),
     cold_edge = calculate_range_edge(patches=lat_floor, weights=mean_dens, q=0.95),
-    abund = sum(mean_dens) * (1/haul_km2_per_tow) * meanpatcharea) 
+    dens = mean(mean_dens)) 
 
 persistence_dat <- data.frame(year = years_proj) %>% 
   bind_rows(persistence) %>% 
-  fill(warm_edge, centroid, cold_edge, abund, .direction="up") %>% 
+  fill(warm_edge, centroid, cold_edge, dens, .direction="up") %>% 
   filter(!is.na(year))
 
 persistence_summary <- persistence_dat %>% 
-  pivot_longer(cols=warm_edge:abund, names_to="feature", values_to="value_tmp") %>% 
+  pivot_longer(cols=warm_edge:dens, names_to="feature", values_to="value_tmp") %>% 
   left_join(dat_test_patch)%>% # compare  to true data 
   mutate(resid = value_tmp - value, 
          resid_sq = resid^2, 
@@ -206,7 +209,7 @@ persistence_summary <- persistence_dat %>%
 points_for_plot <- dat_test_patch %>% 
   mutate(id = 'Observed')%>% rename(value_tmp = value) %>% 
   bind_rows(gam_time %>% mutate(id = 'GAM') )  %>% 
-  bind_rows(persistence_dat %>% pivot_longer(cols=c('warm_edge','cold_edge','abund','centroid'), values_to='value_tmp', names_to='feature') %>% mutate(id='Persistence')) %>% 
+  bind_rows(persistence_dat %>% pivot_longer(cols=c('warm_edge','cold_edge','dens','centroid'), values_to='value_tmp', names_to='feature') %>% mutate(id='Persistence')) %>% 
   filter(feature %in% c('warm_edge','cold_edge','centroid')) %>% 
   mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature)) 
 write_csv(points_for_plot, file=here("processed-data","points_for_plot.csv"))
@@ -221,68 +224,125 @@ drm_out <- NULL
 
 # pull in drm forecasts and calculate residuals by year and by feature (centroid, edges) 
 # slow! try to speed this up at some point
-for(i in 1:nrow(summarydat)){
+
+if(run_in_parallel == TRUE) {
   
-  tmpdat <- summarydat[i,]
+  cl <- makeCluster(num_cores)
+  registerDoParallel(cl)
   
-  results_path <- file.path(paste0('~/github/mid_atlantic_forecasts/results/',tmpdat$id))
+  # Parallel loop
+  drm_out <- foreach(i = 1:nrow(ctrl_file), .combine = bind_rows, .packages = c("here", "tidybayes", "dplyr", "readr")) %dopar% {
+    tmpdat <- ctrl_file[i, ]
+    
+    results_path <- here(paste0("results/", tmpdat$id))
+    
+    tmp_model <- tryCatch(read_rds(file.path(results_path, "stan_model_fit.rds")), error = function(e) return(NULL))
+    if (is.null(tmp_model)) next
+    
+    observed_dens_posterior_predictive <- tidybayes::spread_draws(tmp_model, density_obs_proj[patch, year])
+    centroid_proj <- tidybayes::spread_draws(tmp_model, centroid_proj[year])
+    range_quantiles_proj <- tidybayes::spread_draws(tmp_model, range_quantiles_proj[quantile, year]) %>%
+      mutate(quantile = as.factor(quantiles_calc[quantile]), .keep = "unused")
+    
+    # Save posteriors
+    write_rds(observed_dens_posterior_predictive, file.path(results_path, "density_obs_proj.rds"))
+    write_rds(range_quantiles_proj, file.path(results_path, "range_quantiles_proj.rds"))
+    write_rds(centroid_proj, file.path(results_path, "centroid_proj.rds"))
+    
+    centroid_tmp <- centroid_proj %>% 
+      mutate(year = year + min(years_proj) - 1) %>% 
+      left_join(dat_test_patch %>% filter(feature == "centroid")) %>% 
+      mutate(resid = centroid_proj - value,
+             resid_sq = resid^2, 
+             id = tmpdat$id) %>% 
+      select(-centroid_proj, -value)
+    
+    warm_edge_tmp <- range_quantiles_proj %>% 
+      filter(range_quantiles_proj < Inf, quantile == 0.05) %>%  
+      mutate(
+        year = year + min(years_proj) - 1, 
+        range_quantiles_proj = range_quantiles_proj + min(patches)) %>% 
+      left_join(dat_test_patch %>% filter(feature == "warm_edge")) %>% 
+      mutate(resid = range_quantiles_proj - value,
+             resid_sq = resid^2, 
+             id = tmpdat$id) %>% 
+      select(-range_quantiles_proj, -value, -quantile)
+    
+    cold_edge_tmp <- range_quantiles_proj %>% 
+      filter(range_quantiles_proj < Inf, quantile == 0.95) %>%  
+      mutate(
+        year = year + min(years_proj) - 1, 
+        range_quantiles_proj = range_quantiles_proj + min(patches)) %>% 
+      left_join(dat_test_patch %>% filter(feature == "cold_edge")) %>% 
+      mutate(resid = range_quantiles_proj - value,
+             resid_sq = resid^2, 
+             id = tmpdat$id) %>% 
+      select(-range_quantiles_proj, -value, -quantile)
+    
+    bind_rows(centroid_tmp, warm_edge_tmp, cold_edge_tmp)
+  }
   
-  # get the Stan model and extract posteriors that we want for plots 
-  tmp_model <-  tryCatch(read_rds(file.path(results_path, "stan_model_fit.rds")))
-  observed_abund_posterior_predictive <- tidybayes::spread_draws(tmp_model, density_obs_proj[patch,year])
-  centroid_proj <- tidybayes::spread_draws(tmp_model, centroid_proj[year]) 
-  range_quantiles_proj <- tidybayes::spread_draws(tmp_model, range_quantiles_proj[quantile, year]) %>%
-    mutate(quantile = as.factor(quantiles_calc[quantile]), .keep="unused") 
-  
-  # save those posteriors
-  write_rds(observed_abund_posterior_predictive, file.path(results_path, "density_obs_proj.rds"))
-  write_rds(range_quantiles_proj, file.path(results_path, "range_quantiles_proj.rds"))
-  write_rds(centroid_proj, file.path(results_path, "centroid_proj.rds")) 
-  
-  # abund_tmp <- observed_abund_posterior_predictive %>%
-  #   mutate(year = year + min(years_proj) - 1) %>%
-  #   group_by(year, .chain, .iteration, .draw) %>%
-  #   summarise(density_obs_proj_sum = sum(density_obs_proj)) %>%
-  #   left_join(dat_test_patch %>% filter(feature=="centroid"))
-  
-  centroid_tmp <- centroid_proj %>% 
-    mutate(year = year + min(years_proj) - 1) %>% 
-    left_join(dat_test_patch %>% filter(feature=="centroid")) %>% 
-    mutate(resid = centroid_proj - value,
-           resid_sq = resid^2, 
-           id = tmpdat$id) %>% 
-    select(-centroid_proj, -value)
-  
-  warm_edge_tmp <- range_quantiles_proj %>% 
-    filter(range_quantiles_proj < Inf,
-           quantile == 0.05) %>%  
-    mutate(
-      year = year + min(years_proj) - 1, 
-      range_quantiles_proj = range_quantiles_proj + min(patches)) %>% # don't need to subtract 1. we want patch 0.09 to be lat 35.09
-    left_join(dat_test_patch %>% filter(feature=="warm_edge")) %>% 
-    mutate(resid = range_quantiles_proj - value,
-           resid_sq = resid^2, 
-           id = tmpdat$id)%>% 
-    select(-range_quantiles_proj, -value, -quantile)
-  
-  cold_edge_tmp <- range_quantiles_proj %>% 
-    filter(range_quantiles_proj < Inf,
-           quantile == 0.95) %>%  
-    mutate(
-      year = year + min(years_proj) - 1, 
-      range_quantiles_proj = range_quantiles_proj + min(patches)) %>% # don't need to subtract 1. we want patch 0.09 to be lat 35.09
-    left_join(dat_test_patch %>% filter(feature=="cold_edge")) %>% 
-    mutate(resid = range_quantiles_proj - value,
-           resid_sq = resid^2, 
-           id = tmpdat$id)%>% 
-    select(-range_quantiles_proj, -value, -quantile)
-  
-  drm_out <- bind_rows(drm_out, centroid_tmp, warm_edge_tmp, cold_edge_tmp)
+  # Stop the cluster
+  stopCluster(cl)
+}  else {
+  for(i in 1:nrow(ctrl_file)){ # should be summarydat not ctrl_file once I update the code to do convergence checks
+    
+    tmpdat <- ctrl_file[i,]
+    
+    results_path <- here(paste0("results/",tmpdat$id))
+    
+    # get the Stan model and extract posteriors that we want for plots 
+    tmp_model <-  tryCatch(read_rds(file.path(results_path, "stan_model_fit.rds")))
+    
+    observed_dens_posterior_predictive <- tidybayes::spread_draws(tmp_model, density_obs_proj[patch,year])
+    centroid_proj <- tidybayes::spread_draws(tmp_model, centroid_proj[year]) 
+    range_quantiles_proj <- tidybayes::spread_draws(tmp_model, range_quantiles_proj[quantile, year]) %>%
+      mutate(quantile = as.factor(quantiles_calc[quantile]), .keep="unused") 
+    
+    # save those posteriors
+    write_rds(observed_dens_posterior_predictive, file.path(results_path, "density_obs_proj.rds"))
+    write_rds(range_quantiles_proj, file.path(results_path, "range_quantiles_proj.rds"))
+    write_rds(centroid_proj, file.path(results_path, "centroid_proj.rds")) 
+    
+    centroid_tmp <- centroid_proj %>% 
+      mutate(year = year + min(years_proj) - 1) %>% 
+      left_join(dat_test_patch %>% filter(feature=="centroid")) %>% 
+      mutate(resid = centroid_proj - value,
+             resid_sq = resid^2, 
+             id = tmpdat$id) %>% 
+      select(-centroid_proj, -value)
+    
+    warm_edge_tmp <- range_quantiles_proj %>% 
+      filter(range_quantiles_proj < Inf,
+             quantile == 0.05) %>%  
+      mutate(
+        year = year + min(years_proj) - 1, 
+        range_quantiles_proj = range_quantiles_proj + min(patches)) %>% # don't need to subtract 1. we want patch 0.09 to be lat 35.09
+      left_join(dat_test_patch %>% filter(feature=="warm_edge")) %>% 
+      mutate(resid = range_quantiles_proj - value,
+             resid_sq = resid^2, 
+             id = tmpdat$id)%>% 
+      select(-range_quantiles_proj, -value, -quantile)
+    
+    cold_edge_tmp <- range_quantiles_proj %>% 
+      filter(range_quantiles_proj < Inf,
+             quantile == 0.95) %>%  
+      mutate(
+        year = year + min(years_proj) - 1, 
+        range_quantiles_proj = range_quantiles_proj + min(patches)) %>% # don't need to subtract 1. we want patch 0.09 to be lat 35.09
+      left_join(dat_test_patch %>% filter(feature=="cold_edge")) %>% 
+      mutate(resid = range_quantiles_proj - value,
+             resid_sq = resid^2, 
+             id = tmpdat$id)%>% 
+      select(-range_quantiles_proj, -value, -quantile)
+    
+    drm_out <- bind_rows(drm_out, centroid_tmp, warm_edge_tmp, cold_edge_tmp)
+  }
 }
 write_csv(drm_out, file=here("processed-data","posteriors_for_model_evaluation.csv"))
 
-drm_out <- drm_out %>% 
-  filter(id %in% summarydat$id)
+# drm_out <- drm_out %>% 
+#   filter(id %in% summarydat$id)
 
 drm_summary <- drm_out %>% 
   filter(!is.na(resid)) %>% 
