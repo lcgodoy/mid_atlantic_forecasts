@@ -3,3 +3,7 @@ v0.13,"process error, known f",1,0,0,0,0,0,1,1,1,1
 v0.39,"process error, known f, temperature movement",1,0,1,0,0,0,1,0,1,1
 v0.40,"process error, known f, temperature recruitment",1,0,0,1,0,0,1,1,1,1
 v0.41,"process error, known f, temperature mortality",1,0,0,0,1,0,1,1,1,1
+v0.46,"length comps, process error, known f",1,1,0,0,0,0,1,1,1,1
+v0.52,"length comps, process error, known f, temperature movement",1,1,1,0,0,0,1,0,1,1
+v0.53,"length comps, process error, known f, temperature recruitment",1,1,0,1,0,0,1,1,1,1
+v0.54,"length comps, process error, known f, temperature mortality",1,1,0,0,1,0,1,1,1,1

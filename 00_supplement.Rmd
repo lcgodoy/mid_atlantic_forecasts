@@ -27,8 +27,13 @@ dat_test <- read_csv(here("processed-data","flounder_catch_at_length_fall_testin
 dat_catchonly <- read_csv(here("processed-data","flounder_catch_fall_training.csv"))
 dat_test_catchonly <- read_csv(here("processed-data","flounder_catch_fall_testing.csv"))
 convergence_checks <- read_csv(file=here("results","convergence_checks.csv"))
-ctrl_file <- read_csv(file=here("control_file.csv"))
-best_models <- slice(ctrl_file, 60:64) # PLACEHOLDER!!!!!!!!!!!!!!!!!!!!!!!!!!
+ctrl_file <- read_csv(file=here("ctrl_file_used.csv"))
+load(here("processed-data","stan_data_prep.Rdata"))
+
+# drm_outputs_available_locally <- TRUE
+# 
+# if(drm_outputs_available_locally){
+#   drm_out <- read_csv(here("processed-data","posteriors_for_model_evaluation.csv")) }
 ```
 
 ```{r opts, setup2, include=FALSE}
@@ -37,24 +42,6 @@ knitr::opts_chunk$set(
 )
 #knitr::opts_knit$set(eval.after = "fig.cap")
 ```
-
-# Tables 
-
-```{r tbl-surveys}
-ctrl_dat <- ctrl_file %>% 
-  select(-id, -do_dirichlet, -exp_yn, -known_historic_f, -description) 
-
-ctrl_dat <- cbind(id = ctrl_file$id, data.frame(ifelse(ctrl_dat == 0, "No", "Yes"))) 
-
-ctrl_dat <- left_join(ctrl_dat, convergence_checks %>% select(-low_ebfmi))
-
-ctrl_dat %>% 
-  kbl(booktabs=TRUE, col.names=c("ID","Fit to Length","Movement ~ T","Recruitment ~ T", "Mortality ~ T", "Spawner-Recruit Rel.","Process Error", "Known F", "No. Successful Chains", "Mean Divergences"), caption="Description of dynamic range model (DRM) configurations used in the analysis. Model options included fitting to length data; including a temperature effect on movement, recruitment, or mortality; fitting a spawner-recruit relationship (i.e., positive density dependence); including a process error term; and using fishing mortality values from the summer flounder stock assessment. Two forms of model diagnostics are also reported: the number of successful chains (out of four) and the proportion of divergent iterations after warm-up.", digits=3) %>%
-  kable_styling(font_size = 6, latex_options = c("striped"), full_width=TRUE)
-```
-\clearpage
-
-# Figures 
 
 ```{r haul distribution, fig.cap="Frequency distribution of summer flounder abundance in all hauls used in the analysis (testing and training data combined; *n* = 12,318)."}
 bind_rows(dat_catchonly, dat_test_catchonly) %>% 
@@ -65,12 +52,34 @@ bind_rows(dat_catchonly, dat_test_catchonly) %>%
   theme_bw() 
 ```
 
+```{r dens-by-patch, fig.cap="Observed and estimated density in the training dataset by patch and year."}
+
+make_ribbon_plot <- function(k, years, patches, dat_train_dens) {
+    results_path <- here('results',k)
+    
+    density_hat <- read_rds(here(results_path, "density_hat.rds")) %>%  
+      mutate(year = year + min(years) - 1,
+             patch = patch + min(patches) - 1) 
+
+plot_out <- density_hat %>% 
+  ggplot(aes(year, density_hat)) + 
+  stat_lineribbon() +
+  geom_point(data = dat_train_dens %>% mutate(year = year + min(years) - 1, patch = lat_floor), aes(year, mean_dens), color = "red") +
+  facet_wrap(~patch, scales = "free_y") +
+  labs(x="Year",y="Density", title = sprintf(k)) + 
+  scale_fill_brewer()
+print(plot_out)
+}
+
+  walk(ctrl_file$id, ~make_ribbon_plot(.x, years, patches, dat_train_dens))
+```
+
 ```{r important params, fig.cap="Posterior distributions of three important parameters from the best-fitting DRMs. These parameters are *d*, the annual dispersal rate between adjacent patches; *Topt*, the optimal temperature estimated for whichever process (movement or recruitment or mortality) was estimated as temperature-dependent; and *width*, a parameter controlling how sensitive the modeled process was to temperature. The best-fitting DRMs are described in EXPLAIN HERE."}
 out <- NULL
 
-for(i in best_models$id){
+for(i in ctrl_file$id){
   
-  results_path <- file.path(paste0('~/github/mid_atlantic_forecasts/results/',i))
+    results_path <- here('results',i)
   
   # get the Stan model and extract posteriors that we want for plots. slow! 
   tmp_model <-  tryCatch(read_rds(file.path(results_path, "stan_model_fit.rds")))

@@ -239,15 +239,24 @@ if(run_in_parallel == TRUE) {
     tmp_model <- tryCatch(read_rds(file.path(results_path, "stan_model_fit.rds")), error = function(e) return(NULL))
     if (is.null(tmp_model)) next
     
-    observed_dens_posterior_predictive <- tidybayes::spread_draws(tmp_model, density_obs_proj[patch, year])
-    centroid_proj <- tidybayes::spread_draws(tmp_model, centroid_proj[year])
-    range_quantiles_proj <- tidybayes::spread_draws(tmp_model, range_quantiles_proj[quantile, year]) %>%
-      mutate(quantile = as.factor(quantiles_calc[quantile]), .keep = "unused")
     
-    # Save posteriors
-    write_rds(observed_dens_posterior_predictive, file.path(results_path, "density_obs_proj.rds"))
+    density_obs_proj <- tidybayes::spread_draws(tmp_model, density_obs_proj[patch,year])
+    
+    centroid_proj <- tidybayes::spread_draws(tmp_model, centroid_proj[year]) 
+    range_quantiles_proj <- tidybayes::spread_draws(tmp_model, range_quantiles_proj[quantile, year]) %>%
+      mutate(quantile = as.factor(quantiles_calc[quantile]), .keep="unused") 
+    density_hat <- tidybayes::spread_draws(tmp_model, density_hat[patch,year])
+    
+    range_quantiles <- tidybayes::spread_draws(tmp_model, range_quantiles[quantile, year]) %>%
+      mutate(quantile = as.factor(quantiles_calc[quantile]), .keep="unused") 
+    # save those posteriors
+    write_rds(density_obs_proj, file.path(results_path, "density_obs_proj.rds"))
+    write_rds(density_hat, file.path(results_path, "density_hat.rds"))
+    
     write_rds(range_quantiles_proj, file.path(results_path, "range_quantiles_proj.rds"))
-    write_rds(centroid_proj, file.path(results_path, "centroid_proj.rds"))
+    write_rds(range_quantiles, file.path(results_path, "range_quantiles.rds"))
+    
+    write_rds(centroid_proj, file.path(results_path, "centroid_proj.rds")) 
     
     centroid_tmp <- centroid_proj %>% 
       mutate(year = year + min(years_proj) - 1) %>% 
@@ -289,19 +298,27 @@ if(run_in_parallel == TRUE) {
     
     tmpdat <- ctrl_file[i,]
     
-    results_path <- here(paste0("results/",tmpdat$id))
+    results_path <- here("results",tmpdat$id)
     
     # get the Stan model and extract posteriors that we want for plots 
     tmp_model <-  tryCatch(read_rds(file.path(results_path, "stan_model_fit.rds")))
     
-    observed_dens_posterior_predictive <- tidybayes::spread_draws(tmp_model, density_obs_proj[patch,year])
+    density_obs_proj <- tidybayes::spread_draws(tmp_model, density_obs_proj[patch,year])
+    
     centroid_proj <- tidybayes::spread_draws(tmp_model, centroid_proj[year]) 
     range_quantiles_proj <- tidybayes::spread_draws(tmp_model, range_quantiles_proj[quantile, year]) %>%
       mutate(quantile = as.factor(quantiles_calc[quantile]), .keep="unused") 
+    density_hat <- tidybayes::spread_draws(tmp_model, density_hat[patch,year])
     
+    range_quantiles <- tidybayes::spread_draws(tmp_model, range_quantiles[quantile, year]) %>%
+      mutate(quantile = as.factor(quantiles_calc[quantile]), .keep="unused") 
     # save those posteriors
-    write_rds(observed_dens_posterior_predictive, file.path(results_path, "density_obs_proj.rds"))
+    write_rds(density_obs_proj, file.path(results_path, "density_obs_proj.rds"))
+    write_rds(density_hat, file.path(results_path, "density_hat.rds"))
+    
     write_rds(range_quantiles_proj, file.path(results_path, "range_quantiles_proj.rds"))
+    write_rds(range_quantiles, file.path(results_path, "range_quantiles.rds"))
+    
     write_rds(centroid_proj, file.path(results_path, "centroid_proj.rds")) 
     
     centroid_tmp <- centroid_proj %>% 

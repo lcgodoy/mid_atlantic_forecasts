@@ -28,11 +28,10 @@ sapply(funs, function(x)
 # which range edges should be calculated?
 #  
 quantiles_calc <- c(0.05, 0.5, 0.95)
-quantiles_calc <- c(0.95, 0.95, 0.95)
 
 ctrl_file <- read_csv("control_file.csv") %>% 
   filter(process_error_toggle == 1, 
-         eval_l_comps == 0,
+      #   eval_l_comps == 0,
          known_f == 1,
          spawner_recruit_relationship == 0)
 
@@ -60,9 +59,6 @@ iters <- 5000
 warmups <- 2000
 chains <- 4
 cores <- 4
-
-# ctrl_file <- ctrl_file |> 
-#   slice(1)
 
 load(here("processed-data","stan_data_prep.Rdata"))
 
@@ -96,7 +92,7 @@ if(run_in_parallel == TRUE){
         adapt_delta = 0.99,
         run_forecast = 1,
         quantiles_calc = quantiles_calc
-      ), error = function(e) e)) # Handle errors
+      ))) 
     }
   }
   

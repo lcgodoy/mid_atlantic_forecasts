@@ -24,9 +24,9 @@ dat_catchonly <- read_csv(here("processed-data","flounder_catch_fall_training.cs
 dat_test_catchonly <- read_csv(here("processed-data","flounder_catch_fall_testing.csv"))
 convergence_checks <- read_csv(file=here("results","convergence_checks.csv"))
 dat_forecasts_summ <- read_csv(file = here("processed-data","model_comparison_summary.csv"))
-ctrl_file <- read_csv(file=here("control_file.csv"))
+ctrl_file <- read_csv(file=here("ctrl_file_used.csv"))
 dat_test_patch <- read_csv(file=here("processed-data","dat_test_patch.csv"))
-gam_out <- read_csv(file = here("processed-data","gam_abundance_time.csv"))
+gam_out <- read_csv(file = here("processed-data","gam_density_time.csv"))
 points_for_plot <- read_csv(file=here("processed-data","points_for_plot.csv"))
 load(here("processed-data","stan_data_prep.Rdata"))
 
@@ -237,12 +237,12 @@ ggsave(gg_btemp, filename=here("results","btemp_lat_time.png"), width=110, heigh
 # still too much to look at... need to trim down more 
 
 # hacky way to get the best models 
-best_drms <- dat_forecasts_summ %>% 
-  filter(metric=='RMSE', !id %in% c('GAM','Persistence')) %>% 
-  group_by(id) %>% 
-  mutate(mean_value = mean(value)) %>% 
-  filter(mean_value < 0.75)
-length(unique(best_drms$id))
+# best_drms <- dat_forecasts_summ %>% 
+#   filter(metric=='RMSE', !id %in% c('GAM','Persistence')) %>% 
+#   group_by(id) %>% 
+#   mutate(mean_value = mean(value)) %>% 
+#   filter(mean_value < 0.75)
+# length(unique(best_drms$id))
 
 # gg_metrics3 <- dat_forecasts_summ  %>% 
 #   filter(id %in% c(unique(best_drms$id), 'GAM','Persistence')) %>% 
@@ -264,7 +264,7 @@ length(unique(best_drms$id))
 # ggsave(gg_metrics3, filename=here("results","bias_v_rmse.png"), width=110, height=60, dpi=600, units="mm", scale=1.5)
 
 dat_evil_plot <- dat_forecasts_summ  %>% 
-  filter(id %in% c(unique(best_drms$id), 'GAM','Persistence')) %>% 
+  # filter(id %in% c(unique(best_drms$id), 'GAM','Persistence')) %>% 
   mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature),
          type = ifelse(str_detect(id, "0."),"DRM", id),
          id = gsub("v0.", "v", id))
@@ -298,7 +298,7 @@ drms_without_t <- ctrl_file %>%
   pull(id)
 
 tbl_out <- ctrl_dat %>% 
-  filter(id %in% best_drms$id) %>% 
+  filter(id %in% ctrl_file$id) %>% 
   pivot_longer(cols = c('T_dep_movement','T_dep_mortality','T_dep_recruitment'), values_to='value',names_to='formulation') %>% 
   group_by(id) %>% 
   mutate(T_effect = case_when(
@@ -323,10 +323,10 @@ write_csv(tbl_out, file = here("results","best_drm_table.csv"))
 # want to plot dat_test_patch, gam_time, and persistence_dat against the posteriors 
 
 if(drm_outputs_available_locally == TRUE) {
-  for(k in unique(best_drms$id)){
-    results_path <- file.path(paste0('~/github/mid_atlantic_forecasts/results/',k))
+  for(k in unique(ctrl_file$id)){
+    results_path <- here('results',k)
     
-    tmp_dens <- read_rds(file.path(results_path, "density_obs_proj.rds")) %>% 
+    tmp_dens_proj <- read_rds(file.path(results_path, "density_obs_proj.rds")) %>% 
       mutate(year = year + min(years_proj) - 1,
              patch = patch + min(patches) - 1) %>% 
       filter(year < 2017)
@@ -390,7 +390,7 @@ if(drm_outputs_available_locally == TRUE) {
             axis.text.x = element_text(angle = 45, vjust=0.8))
     ggsave(gg_range_time_drm_warm, filename=paste0(here("results"),"/warm_edge_time_",k,".png"), dpi=600, units="mm", width=75, height=55)
     
-    gg_est_tile_drm <- tmp_dens %>%
+    gg_est_tile_drm <- tmp_dens_proj %>%
       group_by(patch, year) %>% 
       summarise(Abundance = mean(density_obs_proj)) %>% 
       rename("Latitude" = patch, "Year" = year) %>% 
@@ -404,6 +404,15 @@ if(drm_outputs_available_locally == TRUE) {
             axis.text.x = element_text(angle = 45, vjust=0.8)) +
       NULL
     ggsave(gg_est_tile_drm, filename=paste0(here("results"),"/tileplot_time_",k,".png"), dpi=600, units="mm", width=75, height=75)
+    
+    gg_dens_proj_by_patch_drm <- tmp_dens_proj %>% 
+      ggplot(aes(year, density_obs_proj)) + 
+      stat_lineribbon() +
+      geom_point(data = dat_test_dens |> mutate(year = year + min(years_proj) - 1, patch = lat_floor), aes(year, mean_dens), color = "red") +
+      facet_wrap(~patch, scales = "free_y") +
+      labs(x="Year",y="Density") + 
+      scale_fill_brewer()
+    ggsave(gg_dens_proj_by_patch_drm, filename=paste0(here("results"),"/drm_proj_dens_by_patch_",k,".png"), dpi=600, units="mm", width=75, height=55)
     
   } 
 }
@@ -460,16 +469,6 @@ gg_range_time_centroid <- ggplot(data = points_for_plot %>% filter(feature=='Cen
         axis.text.x = element_text(angle = 45, vjust=0.8))
 ggsave(gg_range_time_centroid, filename=paste0(here("results"),"/centroid_time.png"), dpi=600, units="mm", width=75, height=55)
 
-areadat <- data.frame(area = area)
-areadat$patch <- seq(1, 10, 1)
-
-abund_p_y_proj <-  dat_test_dens %>% 
-  left_join(areadat, by="patch") %>% 
-  mutate(abundance = mean_dens * (1/0.0384) * area)
-abund_p_y <-  dat_train_dens %>% 
-  left_join(areadat, by="patch") %>% 
-  mutate(abundance = mean_dens * (1/0.0384) * area)
-
 # entire time-series
 gg_ts_abundance_tile <- abund_p_y_proj %>%
   mutate(Year = (year + min(years_proj) - 1), Latitude = (patch + min(patches) - 1), Abundance=abundance) %>%
@@ -485,17 +484,17 @@ gg_ts_abundance_tile <- abund_p_y_proj %>%
   theme(legend.position = "none",
         axis.text.x = element_text(angle = 45, vjust=0.8))
 
-gg_observed_abundance_tile <- abund_p_y_proj %>%
-  mutate(Year = (year + min(years_proj) - 1), Latitude = (patch + min(patches) - 1), Abundance=abundance) %>%
-  ggplot(aes(x=Year, y=Latitude, fill=Abundance)) +
+gg_observed_dens_tile <- dat_test_dens %>%
+  mutate(Year = (year + min(years_proj) - 1), Latitude = lat_floor, Density=mean_dens) %>%
+  ggplot(aes(x=Year, y=Latitude, fill=Density)) +
   geom_tile() +
   scale_x_continuous(breaks=seq(min(years_proj), max(years_proj), 1)) +
   scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
   #  scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
-  labs(title="Relative abundance (data)") +
+  labs(title="Density (data)") +
   theme(legend.position = "none",
         axis.text.x = element_text(angle = 45, vjust=0.8))
-ggsave(gg_observed_abundance_tile, filename=paste0(here("results"),"/tileplot_time_observed.png"), dpi=600, units="mm", width=75, height=75)
+ggsave(gg_observed_dens_tile, filename=paste0(here("results"),"/tileplot_time_observed.png"), dpi=600, units="mm", width=75, height=75)
 
 gg_persistence_tile <- expand_grid(patches, years_proj) %>% 
   rename("Year" = years_proj, "Latitude" = patches) %>% 
