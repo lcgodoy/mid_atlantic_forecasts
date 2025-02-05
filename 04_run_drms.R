@@ -1,4 +1,4 @@
-
+# for compilation issues with cmdstanr try cmdstanr::rebuild_cmdstan()
 set.seed(42)
 library(tidyverse)
 library(ggridges)
@@ -31,9 +31,11 @@ quantiles_calc <- c(0.05, 0.5, 0.95)
 
 ctrl_file <- read_csv("control_file.csv") %>% 
   filter(process_error_toggle == 1, 
-      #   eval_l_comps == 0,
+         eval_l_comps == 0,
          known_f == 1,
          spawner_recruit_relationship == 0)
+
+ctrl_file$name <- c("DRM null", "DRM T-movement", "DRM T-recruit", "DRM T-mortality" )
 
 write_csv(ctrl_file, file=here("ctrl_file_used.csv"))
 # ctrl_file <- read_csv("control_file.csv") %>%

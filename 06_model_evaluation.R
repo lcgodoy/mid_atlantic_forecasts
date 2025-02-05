@@ -2,9 +2,6 @@
 # SETUP
 ###############
 
-# much of this script is copied from prep_summer_flounder.R; revisit it if that script is changed! 
-# this takes a few hours to run because it loops over many models and loads the full posteriors to calculate summary statistics 
-
 # load packages 
 set.seed(42)
 library(tidyverse)
@@ -179,7 +176,7 @@ gam_summary <- gam_time %>%
   mutate(resid = value_tmp - value, 
          resid_sq = resid^2, 
          .keep = "unused", # drop all the columns used in calculations 
-         id = "GAM") 
+         name = "GAM") 
 
 ###############
 # MAKE PERSISTENCE FORECAST
@@ -204,11 +201,11 @@ persistence_summary <- persistence_dat %>%
   mutate(resid = value_tmp - value, 
          resid_sq = resid^2, 
          .keep = "unused", # drop all the columns used in calculations 
-         id = "Persistence") 
+         name = "Persistence") 
 
 points_for_plot <- dat_test_patch %>% 
-  mutate(id = 'Observed')%>% rename(value_tmp = value) %>% 
-  bind_rows(gam_time %>% mutate(id = 'GAM') )  %>% 
+  mutate(name = 'Observed')%>% rename(value_tmp = value) %>% 
+  bind_rows(gam_time %>% mutate(name = 'GAM') )  %>% 
   bind_rows(persistence_dat %>% pivot_longer(cols=c('warm_edge','cold_edge','dens','centroid'), values_to='value_tmp', names_to='feature') %>% mutate(id='Persistence')) %>% 
   filter(feature %in% c('warm_edge','cold_edge','centroid')) %>% 
   mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature)) 
@@ -263,7 +260,7 @@ if(run_in_parallel == TRUE) {
       left_join(dat_test_patch %>% filter(feature == "centroid")) %>% 
       mutate(resid = centroid_proj - value,
              resid_sq = resid^2, 
-             id = tmpdat$id) %>% 
+             name = tmpdat$name) %>% 
       select(-centroid_proj, -value)
     
     warm_edge_tmp <- range_quantiles_proj %>% 
@@ -274,7 +271,7 @@ if(run_in_parallel == TRUE) {
       left_join(dat_test_patch %>% filter(feature == "warm_edge")) %>% 
       mutate(resid = range_quantiles_proj - value,
              resid_sq = resid^2, 
-             id = tmpdat$id) %>% 
+             name = tmpdat$name) %>% 
       select(-range_quantiles_proj, -value, -quantile)
     
     cold_edge_tmp <- range_quantiles_proj %>% 
@@ -285,7 +282,7 @@ if(run_in_parallel == TRUE) {
       left_join(dat_test_patch %>% filter(feature == "cold_edge")) %>% 
       mutate(resid = range_quantiles_proj - value,
              resid_sq = resid^2, 
-             id = tmpdat$id) %>% 
+             name = tmpdat$name) %>% 
       select(-range_quantiles_proj, -value, -quantile)
     
     bind_rows(centroid_tmp, warm_edge_tmp, cold_edge_tmp)
@@ -326,7 +323,7 @@ if(run_in_parallel == TRUE) {
       left_join(dat_test_patch %>% filter(feature=="centroid")) %>% 
       mutate(resid = centroid_proj - value,
              resid_sq = resid^2, 
-             id = tmpdat$id) %>% 
+             name = tmpdat$name) %>% 
       select(-centroid_proj, -value)
     
     warm_edge_tmp <- range_quantiles_proj %>% 
@@ -338,7 +335,7 @@ if(run_in_parallel == TRUE) {
       left_join(dat_test_patch %>% filter(feature=="warm_edge")) %>% 
       mutate(resid = range_quantiles_proj - value,
              resid_sq = resid^2, 
-             id = tmpdat$id)%>% 
+             name = tmpdat$name)%>% 
       select(-range_quantiles_proj, -value, -quantile)
     
     cold_edge_tmp <- range_quantiles_proj %>% 
@@ -350,7 +347,7 @@ if(run_in_parallel == TRUE) {
       left_join(dat_test_patch %>% filter(feature=="cold_edge")) %>% 
       mutate(resid = range_quantiles_proj - value,
              resid_sq = resid^2, 
-             id = tmpdat$id)%>% 
+             name = tmpdat$name)%>% 
       select(-range_quantiles_proj, -value, -quantile)
     
     drm_out <- bind_rows(drm_out, centroid_tmp, warm_edge_tmp, cold_edge_tmp)
@@ -363,18 +360,18 @@ write_csv(drm_out, file=here("processed-data","posteriors_for_model_evaluation.c
 
 drm_summary <- drm_out %>% 
   filter(!is.na(resid)) %>% 
-  group_by(year, feature, id) %>% 
+  group_by(year, feature, name) %>% 
   summarise(resid = mean(resid)) %>% 
   mutate(resid_sq = resid^2)
 
 dat_forecasts <- drm_summary %>% 
-  left_join(ctrl_file %>% select(id)) %>% 
+  left_join(ctrl_file %>% select(name)) %>% 
   bind_rows(gam_summary, persistence_summary)%>% 
   filter(feature %in% c('centroid','cold_edge','warm_edge')) 
 
 # pool across years to calculate bias and RMSE
 dat_forecasts_summ <- dat_forecasts %>% 
-  group_by(feature, id) %>% 
+  group_by(feature, name) %>% 
   summarise(RMSE = sqrt(mean(resid_sq)), 
             Bias = mean(resid)) %>% 
   pivot_longer(cols=c(RMSE, Bias), values_to="value", names_to="metric") 

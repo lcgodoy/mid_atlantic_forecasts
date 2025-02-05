@@ -1,37 +1,37 @@
-feature,id,metric,value
+feature,name,metric,value
+centroid,DRM T-mortality,RMSE,0.6816658480740596
+centroid,DRM T-mortality,Bias,-0.16927058791681315
+centroid,DRM T-movement,RMSE,0.9334500617116237
+centroid,DRM T-movement,Bias,0.7717032222191704
+centroid,DRM T-recruit,RMSE,0.4889280093676652
+centroid,DRM T-recruit,Bias,-0.27526473291681314
+centroid,DRM null,RMSE,1.0197209651149535
+centroid,DRM null,Bias,0.9365800504715247
 centroid,GAM,RMSE,0.7849445322073147
 centroid,GAM,Bias,-0.5188359930337927
 centroid,Persistence,RMSE,0.4939483078848906
 centroid,Persistence,Bias,0.2923725573609538
-centroid,v0.13,RMSE,1.0186888356315678
-centroid,v0.13,Bias,0.9376565445780851
-centroid,v0.39,RMSE,0.9566089237008949
-centroid,v0.39,Bias,0.7959958484974019
-centroid,v0.40,RMSE,0.48636786510070895
-centroid,v0.40,Bias,-0.2768122537501465
-centroid,v0.41,RMSE,0.6807734284482474
-centroid,v0.41,Bias,-0.1702235637501465
+cold_edge,DRM T-mortality,RMSE,0.4464404398103982
+cold_edge,DRM T-mortality,Bias,-0.1648118351236873
+cold_edge,DRM T-movement,RMSE,2.390587078541689
+cold_edge,DRM T-movement,Bias,2.3750280021156924
+cold_edge,DRM T-recruit,RMSE,0.4026533677254865
+cold_edge,DRM T-recruit,Bias,-0.2695976813950964
+cold_edge,DRM null,RMSE,2.4288176968047055
+cold_edge,DRM null,Bias,2.412173914161158
 cold_edge,GAM,RMSE,1.6277861473760935
 cold_edge,GAM,Bias,1.5805712553244387
 cold_edge,Persistence,RMSE,0.30118794998666903
 cold_edge,Persistence,Bias,0.11639577657285258
-cold_edge,v0.13,RMSE,2.431328309502131
-cold_edge,v0.13,Bias,2.4158409534845284
-cold_edge,v0.39,RMSE,2.408356754606995
-cold_edge,v0.39,Bias,2.3922604013046826
-cold_edge,v0.40,RMSE,0.40042445474773536
-cold_edge,v0.40,Bias,-0.26768912975568165
-cold_edge,v0.41,RMSE,0.44695339905499354
-cold_edge,v0.41,Bias,-0.16781589245425904
+warm_edge,DRM T-mortality,RMSE,0.4966476486980819
+warm_edge,DRM T-mortality,Bias,0.11943447004756289
+warm_edge,DRM T-movement,RMSE,0.7231142879324437
+warm_edge,DRM T-movement,Bias,-0.22838666567247895
+warm_edge,DRM T-recruit,RMSE,0.5282525688086637
+warm_edge,DRM T-recruit,Bias,-0.14859816287879135
+warm_edge,DRM null,RMSE,0.8320014095677868
+warm_edge,DRM null,Bias,-0.6806057334080892
 warm_edge,GAM,RMSE,1.1286063014494985
 warm_edge,GAM,Bias,-0.97240243878819
 warm_edge,Persistence,RMSE,0.8836180356796771
 warm_edge,Persistence,Bias,0.7433898076905159
-warm_edge,v0.13,RMSE,7.401318319497187
-warm_edge,v0.13,Bias,7.38619275633268
-warm_edge,v0.39,RMSE,7.379587481813664
-warm_edge,v0.39,Bias,7.362612204152835
-warm_edge,v0.40,RMSE,4.724181265930053
-warm_edge,v0.40,Bias,4.70266267309247
-warm_edge,v0.41,RMSE,4.831443199821998
-warm_edge,v0.41,Bias,4.8025359103938925
