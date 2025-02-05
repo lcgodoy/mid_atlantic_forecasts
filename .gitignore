@@ -10,8 +10,8 @@
 .RData
 .Ruserdata
 .DS_Store
-.png
-*.png
+#.png
+#*.png
 python/lib/
 python/include/
 python/bin/
@@ -21,6 +21,7 @@ processed-data/fluke_catch_at_length_fall.csv
 src/*.rds
 flounderfits.Rdata
 results/*.rds
+**/results/**/*.png
 **/results/**/*.rds
 #**/results/**/*.csv
 **/results/**/*.txt
