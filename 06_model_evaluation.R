@@ -88,6 +88,20 @@ dat_test_patch <- dat_test_dens %>%
 dat_test_patch[dat_test_patch$year==min(years_proj) & dat_test_patch$feature=="dens_lr",]$value <- log(dat_test_patch[dat_test_patch$year==min(years_proj) & dat_test_patch$feature=="dens",]$value / dat_train_patch[dat_train_patch$year==max(years) & dat_train_patch$feature=="dens",]$value)
 
 write_csv(dat_test_patch, file=here("processed-data","dat_test_patch.csv"))
+
+# create other df for the entire time-series 
+time_series_dat <- dat_test_dens %>%
+  mutate(Year = (year + min(years_proj) - 1), Latitude = lat_floor, Density=mean_dens, .keep="none") %>%
+  bind_rows(dat_train_dens |> mutate(Year = (year + min(years) - 1), Latitude = lat_floor, Density=mean_dens, .keep="none")) |> 
+  group_by(Year) %>% 
+  summarise(
+    `Warm edge` = calculate_range_edge(patches=Latitude, weights=Density, q=0.05),
+    Centroid = weighted.mean(Latitude, w=Density),
+    `Cold edge` = calculate_range_edge(patches=Latitude, weights=Density, q=0.95)) %>% 
+  arrange(Year) %>% 
+  pivot_longer(cols=c(`Warm edge`:`Cold edge`), names_to="feature", values_to="value") 
+write_csv(time_series_dat, file=here("processed-data","time_series_summary_stats.csv"))
+
 ###############
 # FIT SDMS FOR COMPARISON
 ###############

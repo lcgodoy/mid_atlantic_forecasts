@@ -28,6 +28,7 @@ ctrl_file <- read_csv(file=here("ctrl_file_used.csv"))
 dat_test_patch <- read_csv(file=here("processed-data","dat_test_patch.csv"))
 gam_out <- read_csv(file = here("processed-data","gam_density_time.csv"))
 points_for_plot <- read_csv(file=here("processed-data","points_for_plot.csv"))
+time_series_dat <- read_csv(here("processed-data","time_series_summary_stats.csv"))
 load(here("processed-data","stan_data_prep.Rdata"))
 
 drm_outputs_available_locally <- TRUE
@@ -39,20 +40,22 @@ if(drm_outputs_available_locally){
 ############
 
 # how many hauls? 
-length(unique(dat$haulid)) + length(unique(dat_test$haulid)) #12318
-nrow(dat_catchonly) + nrow(dat_test_catchonly) #12318 — should be the same as above
+length(unique(dat$haulid)) + length(unique(dat_test$haulid)) #12203
+nrow(dat_catchonly) + nrow(dat_test_catchonly) #12203 — should be the same as above
 
 # how many positive encounters? 
-nrow(dat_catchonly[dat_catchonly$abundance>0,]) + nrow(dat_test_catchonly[dat_test_catchonly$abundance>0,]) # 2370 
+nrow(dat_catchonly[dat_catchonly$abundance>0,]) + nrow(dat_test_catchonly[dat_test_catchonly$abundance>0,]) # 2308 
+
+# what percentage of hauls were positive encounters? 
+(nrow(dat_catchonly[dat_catchonly$abundance>0,]) + nrow(dat_test_catchonly[dat_test_catchonly$abundance>0,])) / (nrow(dat_catchonly) + nrow(dat_test_catchonly))
 
 # how frequently were more than 10 individuals caught? 
 nrow(bind_rows(dat_catchonly, dat_test_catchonly) %>% 
        filter(abundance >= 10)) / nrow(bind_rows(dat_catchonly, dat_test_catchonly))
 
 # how many individuals caught? 
-sum(dat_catchonly$abundance) # 8145
-sum(dat_test_catchonly$abundance) # 6368
-# 14513 total 
+sum(dat_catchonly$abundance) # 7713
+sum(dat_test_catchonly$abundance) # 6312
 
 # how many individuals caught per year?
 bind_rows(dat_catchonly, dat_test_catchonly) %>% 
@@ -196,72 +199,29 @@ gg_btemp <- ggplot() +
 gg_btemp
 ggsave(gg_btemp, filename=here("results","btemp_lat_time.png"), width=110, height=70, scale = 2.1, dpi=600, units="mm")
 
-# model comparison plots 
 
-# commented out this plot since it has too many points 
-# gg_metrics <- dat_forecasts_summ  %>% 
-#   mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature),
-#          metric = case_match(metric, "rmse" ~ "RMSE", "bias" ~ "Bias", .default=metric), 
-#          type = ifelse(str_detect(id, "0."),"DRM", id),
-#          metric = factor(metric, levels = c("RMSE","Bias")))  %>%  
-#   ggplot(aes(x=feature, y=value)) + 
-#   geom_point(aes(color=type, fill=type),size=1) +
-#   geom_text_repel(aes(label=id), hjust = 1, max.overlaps = Inf) +
-#   scale_color_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
-#   scale_fill_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
-#   theme_bw() + 
-#   facet_wrap(~metric, scales="free_y") +
-#   labs(x="Feature", y="Metric") + 
-#   theme(legend.position = "bottom")
-# gg_metrics
-
-# commented out this plot since it has too many points 
-# gg_metrics2 <- dat_forecasts_summ  %>% 
-#   mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature),
-#          type = ifelse(str_detect(id, "0."),"DRM", id),
-#          metric = factor(metric, levels = c("RMSE","Bias")),
-#          id = gsub("v0.", "v", id))  %>%  
-#   pivot_wider(names_from = metric, values_from = value) %>% 
-#   ggplot(aes(x=RMSE, y=Bias)) + 
-#   geom_point(aes(color=type, fill=type),size=1) +
-#   geom_text_repel(aes(label=id), hjust = 1, max.overlaps = Inf) +
-#   scale_color_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
-#   scale_fill_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
-#   theme_bw() + 
-#   facet_wrap(~feature) +
-#   theme(legend.position = "bottom",
-#         legend.title=element_blank())
-# gg_metrics2
-# ggsave(gg_metrics2, filename=here("results","bias_v_rmse.png"), width=110, height=60, dpi=600, units="mm", scale=1.5)
-
-# still too much to look at... need to trim down more 
-
-# hacky way to get the best models 
-# best_drms <- dat_forecasts_summ %>% 
-#   filter(metric=='RMSE', !id %in% c('GAM','Persistence')) %>% 
-#   group_by(id) %>% 
-#   mutate(mean_value = mean(value)) %>% 
-#   filter(mean_value < 0.75)
-# length(unique(best_drms$id))
-
-# gg_metrics3 <- dat_forecasts_summ  %>% 
-#   filter(id %in% c(unique(best_drms$id), 'GAM','Persistence')) %>% 
-#   mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature),
-#          type = ifelse(str_detect(id, "0."),"DRM", id),
-#          metric = factor(metric, levels = c("RMSE","Bias")),
-#          id = gsub("v0.", "v", id))  %>%  
-#   pivot_wider(names_from = metric, values_from = value) %>% 
-#   ggplot(aes(x=RMSE, y=Bias)) + 
-#   geom_point(aes(color=type, fill=type),size=1) +
-#   geom_text_repel(aes(label=id), hjust = 1, max.overlaps = Inf) +
-#   scale_color_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
-#   scale_fill_manual(values= wesanderson::wes_palette("Darjeeling1", n = 3)) +
-#   theme_bw() + 
-#   facet_wrap(~feature) +
-#   theme(legend.position = "bottom",
-#         legend.title=element_blank())
-# gg_metrics3
-# ggsave(gg_metrics3, filename=here("results","bias_v_rmse.png"), width=110, height=60, dpi=600, units="mm", scale=1.5)
+#  plot entire time-series
+gg_observed <- dat_test_dens %>%
+  mutate(Year = (year + min(years_proj) - 1), Latitude = lat_floor, Density=mean_dens, .keep="none") %>%
+  bind_rows(dat_train_dens |> mutate(Year = (year + min(years) - 1), Latitude = lat_floor, Density=mean_dens, .keep="none")) |> 
+  ggplot() +
+  geom_tile(aes(x=Year, y=Latitude, fill=Density)) +
+  geom_line(data = time_series_dat, aes(x=Year, y=value, group=feature), color="white") + 
+  geom_label(aes(x=Year, y=value, label = feature),
+             data = time_series_dat %>% filter(Year == 2002),
+             nudge_y = 0.5,
+             size = 4, 
+             label.size = 0, 
+             fill = "transparent",
+             color = "white")  +
+  scale_x_continuous(breaks=seq(min(years), max(years_proj), 4)) +
+  scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
+  scale_fill_viridis_c() + 
+  guides(fill = guide_colorbar(theme = theme(legend.direction = "horizontal"))) +
+  theme(legend.position = c(0.3, 0.83), 
+        axis.text.x = element_text(angle = 45, vjust=0.8)) +
+  NULL
+ggsave(gg_observed, filename=paste0(here("results"),"/tileplot_timeseries.png"), dpi=600, units="mm", width=75, height=50, scale = 1.7)
 
 dat_mod_compare <- dat_forecasts_summ  %>% 
   # filter(id %in% c(unique(best_drms$id), 'GAM','Persistence')) %>% 
@@ -279,8 +239,8 @@ gg_mod_compare <- dat_mod_compare %>%
   mutate(
     metric = factor(metric, levels = c("RMSE","Bias")),
     name = factor(name, levels = name_order)
- #   name = reorder_within(name, value, list(metric, feature)) # this option ranks each subplot by its score so the points are sequential in value along the plot
-    ) %>%  
+    #   name = reorder_within(name, value, list(metric, feature)) # this option ranks each subplot by its score so the points are sequential in value along the plot
+  ) %>%  
   ggplot( )+
   geom_point(aes(name, y=value, shape = type)) + 
   geom_hline(yintercept=0, linetype="dashed") + 
@@ -478,22 +438,7 @@ gg_range_time_centroid <- ggplot(data = points_for_plot %>% filter(feature=='Cen
         axis.text.x = element_text(angle = 45, vjust=0.8))
 ggsave(gg_range_time_centroid, filename=paste0(here("results"),"/centroid_time.png"), dpi=600, units="mm", width=75, height=55)
 
-# entire time-series
-gg_ts_abundance_tile <- abund_p_y_proj %>%
-  mutate(Year = (year + min(years_proj) - 1), Latitude = (patch + min(patches) - 1), Abundance=abundance) %>%
-  bind_rows(abund_p_y %>%
-              mutate(Year = (year + min(years) - 1), Latitude = (patch + min(patches) - 1), Abundance=abundance) ) %>% 
-  ggplot(aes(x=Year, y=Latitude, fill=Abundance)) +
-  geom_tile() +
-  scale_x_continuous(breaks=seq(min(years), max(years_proj), 4)) +
-  scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
-  scale_fill_viridis_c() +
-  #  scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
-  labs(title="Relative abundance (data)") +
-  theme(legend.position = "none",
-        axis.text.x = element_text(angle = 45, vjust=0.8))
-
-gg_observed_dens_tile <- dat_test_dens %>%
+gg_observed_proj_dens_tile <- dat_test_dens %>%
   mutate(Year = (year + min(years_proj) - 1), Latitude = lat_floor, Density=mean_dens) %>%
   ggplot(aes(x=Year, y=Latitude, fill=Density)) +
   geom_tile() +
@@ -503,7 +448,7 @@ gg_observed_dens_tile <- dat_test_dens %>%
   labs(title="Density (data)") +
   theme(legend.position = "none",
         axis.text.x = element_text(angle = 45, vjust=0.8))
-ggsave(gg_observed_dens_tile, filename=paste0(here("results"),"/tileplot_time_observed.png"), dpi=600, units="mm", width=75, height=75)
+ggsave(gg_observed_proj_dens_tile, filename=paste0(here("results"),"/tileplot_time_observed.png"), dpi=600, units="mm", width=75, height=75)
 
 gg_persistence_tile <- expand_grid(patches, years_proj) %>% 
   rename("Year" = years_proj, "Latitude" = patches) %>% 
