@@ -268,10 +268,19 @@ dat_mod_compare <- dat_forecasts_summ  %>%
   mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature),
          type = ifelse(str_detect(name, "DRM"),"DRM", name))
 
+name_order <- dat_mod_compare |> 
+  filter(metric=="Bias") |> 
+  group_by(name) |> 
+  summarise(avg = mean(abs(value))) |> 
+  arrange(avg) |> 
+  pull(name)
+
 gg_mod_compare <- dat_mod_compare %>%  
   mutate(
     metric = factor(metric, levels = c("RMSE","Bias")),
-    name = reorder_within(name, value, list(metric, feature))) %>%  
+    name = factor(name, levels = name_order)
+ #   name = reorder_within(name, value, list(metric, feature)) # this option ranks each subplot by its score so the points are sequential in value along the plot
+    ) %>%  
   ggplot( )+
   geom_point(aes(name, y=value, shape = type)) + 
   geom_hline(yintercept=0, linetype="dashed") + 
@@ -282,6 +291,7 @@ gg_mod_compare <- dat_mod_compare %>%
   facet_grid(feature ~ metric, scales="free", axes="all_y", axis.labels = "all_y") +
   theme(axis.title.x = element_blank(), 
         axis.title.y = element_blank(),
+        axis.text.x = element_text(angle = 45),
         legend.position = "none") +
   ggh4x::facet_nested_wrap(~metric+feature, scales = "free") 
 ggsave(gg_mod_compare, filename=here("results","bias_v_rmse.png"), width=110, height=80, dpi=600, units="mm", scale=1.5)
