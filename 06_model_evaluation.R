@@ -220,7 +220,7 @@ persistence_summary <- persistence_dat %>%
 points_for_plot <- dat_test_patch %>% 
   mutate(name = 'Observed')%>% rename(value_tmp = value) %>% 
   bind_rows(gam_time %>% mutate(name = 'GAM') )  %>% 
-  bind_rows(persistence_dat %>% pivot_longer(cols=c('warm_edge','cold_edge','dens','centroid'), values_to='value_tmp', names_to='feature') %>% mutate(id='Persistence')) %>% 
+  bind_rows(persistence_dat %>% pivot_longer(cols=c('warm_edge','cold_edge','dens','centroid'), values_to='value_tmp', names_to='feature') %>% mutate(name='Persistence')) %>% 
   filter(feature %in% c('warm_edge','cold_edge','centroid')) %>% 
   mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature)) 
 write_csv(points_for_plot, file=here("processed-data","points_for_plot.csv"))

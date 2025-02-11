@@ -15,6 +15,7 @@ library(ggrepel)
 library(ggh4x)
 library(ggdist)
 library(directlabels)
+library(patchwork)
 theme_set(theme_bw())
 
 # data
@@ -224,7 +225,6 @@ gg_observed <- dat_test_dens %>%
 ggsave(gg_observed, filename=paste0(here("results"),"/tileplot_timeseries.png"), dpi=600, units="mm", width=75, height=50, scale = 1.7)
 
 dat_mod_compare <- dat_forecasts_summ  %>% 
-  # filter(id %in% c(unique(best_drms$id), 'GAM','Persistence')) %>% 
   mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature),
          type = ifelse(str_detect(name, "DRM"),"DRM", name))
 
@@ -386,57 +386,133 @@ if(drm_outputs_available_locally == TRUE) {
   } 
 }
 
-#     gg_length <- n_at_length_hat %>% 
-#       ggplot(aes(length, plength)) +
-#       stat_lineribbon(size = .1) +
-#       geom_point(data = n_p_l_y, aes(length, plength), color = "red", alpha = 0.25) +
-#       facet_grid(patch ~ year, scales = "free_y") + 
-#       scale_x_continuous(limits = c(0, 50)) # generates warnings because of the close-to-zero probabilities at larger lengths
+# final plot for MS 
+results_path <-here('results/v0.40')
+drm_dens_proj <- read_rds(file.path(results_path, "density_obs_proj.rds")) %>% 
+  mutate(year = year + min(years_proj) - 1,
+         patch = patch + min(patches) - 1) %>% 
+  filter(year < 2017)
 
-gg_range_time_warm <- ggplot(data = points_for_plot %>% filter(feature=='Warm Edge') %>% 
-                               rename("Latitude" = value_tmp, "Year" = year) %>% 
-                               mutate(id = factor(id, levels=c('Observed','GAM','Persistence')))) +
-  geom_point(aes(x=Year, y=Latitude, color=id, fill=id, shape = id), size=2) + 
-  geom_line(aes(x=Year, y=Latitude, color=id)) + 
-  scale_x_continuous(breaks =seq(2007, 2016, 1)) + 
-  scale_y_continuous(breaks = seq(35, 38, 1), labels =  seq(35, 38, 1), limits=c(34, 39)) +
-  scale_color_manual(values=c("#E20134","#8400CD","#009F81")) + 
-  scale_fill_manual(values=c("#E20134","#8400CD","#009F81")) + 
-  labs(x="Year", y="Latitude", title = "Warm edge") + 
-  theme(legend.title = element_blank(),
-        legend.position = "bottom",
-        axis.text.x = element_text(angle = 45, vjust=0.8))
-ggsave(gg_range_time_warm, filename=paste0(here("results"),"/warm_edge_time.png"), dpi=600, units="mm", width=75, height=55)
+drm_edges <- read_rds(file.path(results_path, "range_quantiles_proj.rds")) %>% 
+  mutate(year = year + min(years_proj) - 1,
+         range_quantiles_proj = range_quantiles_proj + min(patches) - 1) %>% 
+  filter(range_quantiles_proj < Inf,
+         year < 2017)
 
-gg_range_time_cold <- ggplot(data = points_for_plot %>% filter(feature=='Cold Edge') %>% 
-                               rename("Latitude" = value_tmp, "Year" = year) %>% 
-                               mutate(id = factor(id, levels=c('Observed','GAM','Persistence')))) +
-  geom_point(aes(x=Year, y=Latitude, color=id, fill=id, shape = id), size=2) + 
-  geom_line(aes(x=Year, y=Latitude, color=id)) + 
-  scale_x_continuous(breaks =seq(2007, 2016, 1)) + 
-  scale_y_continuous(breaks = seq(38, 44, 1), labels =  seq(38, 44, 1), limits=c(38, 44.1)) +
-  scale_color_manual(values=c("#E20134","#8400CD","#009F81")) + 
-  scale_fill_manual(values=c("#E20134","#8400CD","#009F81")) + 
-  labs(x="Year", y="Latitude", title = "Cold edge") + 
-  theme(legend.title = element_blank(),
-        legend.position = "bottom",
-        axis.text.x = element_text(angle = 45, vjust=0.8))
-ggsave(gg_range_time_cold, filename=paste0(here("results"),"/cold_edge_time.png"), dpi=600, units="mm", width=75, height=55)
+drm_centroids <- read_rds(file.path(results_path, "centroid_proj.rds"))%>% 
+  mutate(year = year + min(years_proj) - 1) %>% 
+  filter(year < 2017)
 
-gg_range_time_centroid <- ggplot(data = points_for_plot %>% filter(feature=='Centroid') %>% 
-                                   rename("Latitude" = value_tmp, "Year" = year) %>% 
-                                   mutate(id = factor(id, levels=c('Observed','GAM','Persistence')))) +
-  geom_point(aes(x=Year, y=Latitude, color=id, fill=id, shape = id), size=2) + 
-  geom_line(aes(x=Year, y=Latitude, color=id)) + 
+centroids_for_ribbon_plot <- drm_centroids |> 
+  group_by(year) |> 
+  summarise(value_tmp = median(centroid_proj)) |> 
+  mutate(feature = "Centroid", name = "DRM") |> 
+  bind_rows(points_for_plot %>% filter(feature=='Centroid')) |> 
+  rename("Latitude" = value_tmp, "Year" = year) %>% 
+  mutate(name = factor(name, levels=c('DRM','Observed','GAM','Persistence')))
+
+gg_best_drm_centroid <- ggplot() +
+   stat_lineribbon(data = drm_centroids, aes(x=year, y=centroid_proj)) + 
+  geom_line(data = centroids_for_ribbon_plot, 
+            aes(x=Year, y=Latitude, color=name), lwd = 1) + 
   scale_x_continuous(breaks =seq(2007, 2016, 1)) + 
-  scale_y_continuous(breaks = seq(37, 40, 1), labels =  seq(37, 40, 1), limits=c(36, 41)) +
-  scale_color_manual(values=c("#E20134","#8400CD","#009F81")) + 
-  scale_fill_manual(values=c("#E20134","#8400CD","#009F81")) + 
+  scale_y_continuous(breaks = seq(37, 39, 1), labels =  seq(37, 39, 1), limits=c(36.5, 40)) +
+  scale_color_manual(values=c("black", "#E20134","#8400CD","#009F81"), name="") + 
+#  scale_fill_manual(values=c("#E20134","#8400CD","#009F81"), name="") + 
+ scale_fill_brewer(#name = "Credible Interval", 
+                   guide = "none") +
   labs(x="Year", y="Latitude", title = "Centroid") + 
-  theme(legend.title = element_blank(),
-        legend.position = "bottom",
-        axis.text.x = element_text(angle = 45, vjust=0.8))
-ggsave(gg_range_time_centroid, filename=paste0(here("results"),"/centroid_time.png"), dpi=600, units="mm", width=75, height=55)
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(angle = 45, vjust=0.8), 
+        plot.title = element_text(hjust = 0.05, vjust = -10))
+gg_best_drm_centroid
+
+cold_edges_for_ribbon_plot <- drm_edges |> 
+  filter(quantile == 0.95) |> 
+  group_by(year) |> 
+  summarise(value_tmp = median(range_quantiles_proj)) |> 
+  mutate(feature = "Cold Edge", name = "DRM") |> 
+  bind_rows(points_for_plot %>% filter(feature=='Cold Edge')) |> 
+  rename("Latitude" = value_tmp, "Year" = year) %>% 
+  mutate(name = factor(name, levels=c('DRM','Observed','GAM','Persistence')))
+
+gg_best_drm_cold_edge <- ggplot() +
+  stat_lineribbon(data = drm_edges |> filter(quantile == 0.95), aes(x=year, y=range_quantiles_proj)) + 
+  geom_line(data = cold_edges_for_ribbon_plot, 
+            aes(x=Year, y=Latitude, color=name), lwd = 1) + 
+  scale_x_continuous(breaks =seq(2007, 2016, 1)) + 
+  scale_y_continuous(breaks = seq(38, 44, 1), labels =  seq(38, 44, 1), limits=c(38, 44)) +
+  scale_color_manual(values=c("black", "#E20134","#8400CD","#009F81"), name="") + 
+  #  scale_fill_manual(values=c("#E20134","#8400CD","#009F81"), name="") + 
+  scale_fill_brewer(#name = "Credible Interval", 
+    guide = "none") +
+  labs(x="Year", y="Latitude", title = "Cold  Edge") + 
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(angle = 45, vjust=0.8), 
+        plot.title = element_text(hjust = 0.05, vjust = -10))
+gg_best_drm_cold_edge
+
+warm_edges_for_ribbon_plot <- drm_edges |> 
+  filter(quantile == 0.05) |> 
+  group_by(year) |> 
+  summarise(value_tmp = median(range_quantiles_proj)) |> 
+  mutate(feature = "Warm Edge", name = "DRM") |> 
+  bind_rows(points_for_plot %>% filter(feature=='Warm Edge')) |> 
+  rename("Latitude" = value_tmp, "Year" = year) %>% 
+  mutate(name = factor(name, levels=c('DRM','Observed','GAM','Persistence')))
+
+gg_best_drm_warm_edge <- ggplot() +
+  stat_lineribbon(data = drm_edges |> filter(quantile == 0.05), aes(x=year, y=range_quantiles_proj)) + 
+  geom_line(data = warm_edges_for_ribbon_plot, 
+            aes(x=Year, y=Latitude, color=name), lwd = 1) + 
+  scale_x_continuous(breaks =seq(2007, 2016, 1)) + 
+  scale_y_continuous(breaks = seq(34, 38, 1), labels =  seq(34, 38, 1), 
+                     limits=c(33.5, 38.5)) +
+  scale_color_manual(values=c("black", "#E20134","#8400CD","#009F81"), name="") + 
+  #  scale_fill_manual(values=c("#E20134","#8400CD","#009F81"), name="") + 
+  scale_fill_brewer(#name = "Credible Interval", 
+    guide = "none") +
+  labs(x="Year", y="Latitude", title = "Warm  Edge") + 
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(angle = 45, vjust=0.8), 
+        plot.title = element_text(hjust = 0.05, vjust = -10))
+gg_best_drm_warm_edge
+
+gg_best_drm <- gg_best_drm_centroid + gg_best_drm_cold_edge + gg_best_drm_warm_edge + plot_layout(ncol=1)
+
+ggsave(gg_best_drm, filename=here("results", "best_drm_time.png"), dpi=600, units="mm", width=75, height=130, scale = 2)
+
+
+
+
+
+
+
+
+
+gg_est_tile_drm <- tmp_dens_proj %>%
+  group_by(patch, year) %>% 
+  summarise(Abundance = mean(density_obs_proj)) %>% 
+  rename("Latitude" = patch, "Year" = year) %>% 
+  ggplot(aes(x=Year, y=Latitude, fill=Abundance)) +
+  geom_tile() +
+  scale_x_continuous(breaks=seq(min(years_proj), max(years_proj), 1)) +
+  scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
+  #     scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
+  labs(x="Year", y="Latitude", title = paste0("DRM ",gsub("0.", "", k))) + 
+  theme(legend.position="none",
+        axis.text.x = element_text(angle = 45, vjust=0.8)) +
+  NULL
+ggsave(gg_est_tile_drm, filename=paste0(here("results"),"/tileplot_time_",k,".png"), dpi=600, units="mm", width=75, height=75)
+
+gg_dens_proj_by_patch_drm <- tmp_dens_proj %>% 
+  ggplot(aes(year, density_obs_proj)) + 
+  stat_lineribbon() +
+  geom_point(data = dat_test_dens |> mutate(year = year + min(years_proj) - 1, patch = lat_floor), aes(year, mean_dens), color = "red") +
+  facet_wrap(~patch, scales = "free_y") +
+  labs(x="Year",y="Density") + 
+  scale_fill_brewer()
+ggsave(gg_dens_proj_by_patch_drm, filename=paste0(here("results"),"/drm_proj_dens_by_patch_",k,".png"), dpi=600, units="mm", width=75, height=55)
 
 gg_observed_proj_dens_tile <- dat_test_dens %>%
   mutate(Year = (year + min(years_proj) - 1), Latitude = lat_floor, Density=mean_dens) %>%
