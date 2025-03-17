@@ -1,9 +1,9 @@
 # ignore *everything*
-*
-!/**/
+#*
+#!/**/
 # and then this 'unignores' anything with an extension
-!*.*
-*.rds
+#!*.*
+#*.rds
 #*.pdf
 .Rproj.user
 .Rhistory
