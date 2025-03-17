@@ -40,6 +40,10 @@ if(drm_outputs_available_locally){
 # calculate all the statistics reported in-text
 ############
 
+# did temperature change in the trawl surveys? 
+summary(lm(formula = "btemp ~ year", data = bind_rows(dat_catchonly, dat_test_catchonly) %>%   select(btemp, year, lat)))
+
+
 # how many hauls? 
 length(unique(dat$haulid)) + length(unique(dat_test$haulid)) #12203
 nrow(dat_catchonly) + nrow(dat_test_catchonly) #12203 — should be the same as above
@@ -166,7 +170,7 @@ get_lat_from_temp <- function(temp, year.predict, dat) {
     pull(estimate)
   out <- (temp-intercept)/slope
   return(out)
-}
+} 
 
 # step 3: estimate isotherm positions for a set of degrees 
 degrees <- seq(9, 15, 2) 
@@ -178,6 +182,17 @@ isotherms <- as.data.frame(degrees) %>%
   mutate(degreeC = paste0(degrees, "°"))
 
 write_rds(isotherms, here("processed-data","sbt_isotherms.rds"))
+
+# did the isotherms shift north? 
+isotherms %>% 
+  group_by(degrees) %>%
+  nest() %>%
+  mutate(
+    model = purrr::map(data, ~lm(est_iso ~ year, data = .x)), 
+    tidymodel = purrr::map(model, broom::tidy)
+  ) %>% 
+  unnest(tidymodel) %>%
+  dplyr::select(-data, -model)
 
 gg_btemp <- ggplot() + 
   geom_raster(data=dat_btemp, aes(x=year, y=lat_floor_offset, fill=btemp)) + 
