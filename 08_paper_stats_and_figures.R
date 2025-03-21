@@ -247,8 +247,15 @@ gg_observed <- dat_test_dens %>%
   geom_line(data = time_series_dat, aes(x=Year, y=value, group=feature), color="white") + 
   geom_vline(aes(xintercept = 2006.5), color="white", linetype = "dashed") +
   geom_label(aes(x=Year, y=value, label = feature),
-             data = time_series_dat %>% filter(Year == 2002),
+             data = time_series_dat %>% filter(Year == 2002 & !feature=="Warm edge"),
              nudge_y = 0.5,
+             size = 4, 
+             label.size = 0, 
+             fill = "transparent",
+             color = "white")  +
+  geom_label(aes(x=Year, y=value, label = feature), # moving just this one label downward 
+             data = time_series_dat %>% filter(Year == 2002 & feature=="Warm edge"),
+             nudge_y = -1.6,
              size = 4, 
              label.size = 0, 
              fill = "transparent",
@@ -261,7 +268,6 @@ gg_observed <- dat_test_dens %>%
         axis.text.x = element_text(angle = 45, vjust=0.8)) +
   coord_cartesian(expand = FALSE) +
   NULL
-gg_observed
 ggsave(gg_observed, filename=paste0(here("results"),"/tileplot_timeseries.png"), dpi=600, units="mm", width=75, height=50, scale = 1.7)
 
 
