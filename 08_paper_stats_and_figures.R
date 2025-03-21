@@ -32,17 +32,24 @@ points_for_plot <- read_csv(file=here("processed-data","points_for_plot.csv"))
 time_series_dat <- read_csv(here("processed-data","time_series_summary_stats.csv"))
 load(here("processed-data","stan_data_prep.Rdata"))
 
-drm_outputs_available_locally <- TRUE
+hauldat <- bind_rows(dat, dat_test) |> 
+  select(date, lat, lon) |> 
+  distinct()
 
-if(drm_outputs_available_locally){
-  drm_out <- read_csv(here("processed-data","posteriors_for_model_evaluation.csv")) }
+fixed_param_dat <- NULL
+for(i in ctrl_file$id){
+  results_path <- here('results',i)
+  out <- read_rds(file.path(here("results"),i,"fixed_params_averaged.rds"))
+  out$name <- ctrl_file[ctrl_file$id==i,]$name
+  fixed_param_dat <- rbind(fixed_param_dat, out)
+}
+  drm_out <- read_csv(here("processed-data","posteriors_for_model_evaluation.csv")) 
 ############
 # calculate all the statistics reported in-text
 ############
 
 # did temperature change in the trawl surveys? 
 summary(lm(formula = "btemp ~ year", data = bind_rows(dat_catchonly, dat_test_catchonly) %>%   select(btemp, year, lat)))
-
 
 # how many hauls? 
 length(unique(dat$haulid)) + length(unique(dat_test$haulid)) #12203
@@ -84,7 +91,15 @@ summary(lm(value_tmp ~ year, data = lm_dat %>%
 summary(lm(value_tmp ~ year, data = lm_dat %>% 
              filter(feature == 'Cold Edge')))
 
-# area map figure
+# summarize posteriors for each model 
+fixed_param_dat |> group_by(name, param) |> summarise(
+  lower = quantile(value, 0.05), 
+  upper = quantile(value, 0.95)
+)
+
+############
+# make area map figure
+############
 
 states <- ne_states(country = c("United States of America","Canada"), returnclass = "sf")
 select <- dplyr::select
@@ -121,6 +136,7 @@ state_points <- cbind(st_centroid(states), st_coordinates(st_centroid(states$geo
 ggmap <- ggplot(data = states) +
   geom_rect(data=recs, mapping=aes(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax), color="black",  alpha=0.5) +
   geom_sf(fill = "grey92") +
+ # geom_point(data=hauldat, aes(x=lon, y=lat), color="black", fill="black", size=0.1) +
   xlab("Longitude") + ylab("Latitude") +
   annotation_scale(location = "bl", width_hint = 0.5, pad_x = unit(1, "in")) +
   annotation_north_arrow(location = "bl", which_north = "true", 
@@ -138,7 +154,9 @@ ggmap <- ggplot(data = states) +
 
 ggsave(ggmap, filename=here("results","area_map.png"), width=110, height=110, dpi=600, units="mm")
 
-# hovmoller plot 
+############
+# make hovmoller plot 
+############
 
 # get bottom temperature data
 dat_btemp <- bind_rows(dat_catchonly, dat_test_catchonly) %>% 
@@ -216,6 +234,10 @@ gg_btemp
 ggsave(gg_btemp, filename=here("results","btemp_lat_time.png"), width=110, height=70, scale = 2.1, dpi=600, units="mm")
 
 
+############
+# make time-series tileplot 
+############
+
 #  plot entire time-series
 gg_observed <- dat_test_dens %>%
   mutate(Year = (year + min(years_proj) - 1), Latitude = lat_floor, Density=mean_dens, .keep="none") %>%
@@ -223,6 +245,7 @@ gg_observed <- dat_test_dens %>%
   ggplot() +
   geom_tile(aes(x=Year, y=Latitude, fill=Density)) +
   geom_line(data = time_series_dat, aes(x=Year, y=value, group=feature), color="white") + 
+  geom_vline(aes(xintercept = 2006.5), color="white", linetype = "dashed") +
   geom_label(aes(x=Year, y=value, label = feature),
              data = time_series_dat %>% filter(Year == 2002),
              nudge_y = 0.5,
@@ -230,14 +253,22 @@ gg_observed <- dat_test_dens %>%
              label.size = 0, 
              fill = "transparent",
              color = "white")  +
-  scale_x_continuous(breaks=seq(min(years), max(years_proj), 4)) +
-  scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
+  scale_x_continuous(breaks=seq(min(years), max(years_proj), 4), limits=c(1971.49, 2016.51)) +
+  scale_y_continuous(breaks=seq(min(patches), max(patches), 1), limits=c(34.49, 44.51)) +
   scale_fill_viridis_c() + 
   guides(fill = guide_colorbar(theme = theme(legend.direction = "horizontal"))) +
   theme(legend.position = c(0.3, 0.83), 
         axis.text.x = element_text(angle = 45, vjust=0.8)) +
+  coord_cartesian(expand = FALSE) +
   NULL
+gg_observed
 ggsave(gg_observed, filename=paste0(here("results"),"/tileplot_timeseries.png"), dpi=600, units="mm", width=75, height=50, scale = 1.7)
+
+
+############
+# make model comparison (bias vs rmse) plot
+############
+
 
 dat_mod_compare <- dat_forecasts_summ  %>% 
   mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature),
@@ -306,25 +337,26 @@ ggsave(gg_mod_compare, filename=here("results","bias_v_rmse.png"), width=110, he
 
 # want to plot dat_test_patch, gam_time, and persistence_dat against the posteriors 
 
-if(drm_outputs_available_locally == TRUE) {
-  for(k in unique(ctrl_file$id)){
-    results_path <- here('results',k)
-    
-    tmp_dens_proj <- read_rds(file.path(results_path, "density_obs_proj.rds")) %>% 
-      mutate(year = year + min(years_proj) - 1,
-             patch = patch + min(patches) - 1) %>% 
-      filter(year < 2017)
-    
-    tmp_edges <- read_rds(file.path(results_path, "range_quantiles_proj.rds")) %>% 
-      mutate(year = year + min(years_proj) - 1,
-             range_quantiles_proj = range_quantiles_proj + min(patches) - 1) %>% 
-      filter(range_quantiles_proj < Inf,
-             year < 2017)
-    
-    tmp_centroids <- read_rds(file.path(results_path, "centroid_proj.rds"))%>% 
-      mutate(year = year + min(years_proj) - 1) %>% 
-      filter(year < 2017)
-    
+# 
+# if(drm_outputs_available_locally == TRUE) {
+#   for(k in unique(ctrl_file$id)){
+#     results_path <- here('results',k)
+#     
+#     tmp_dens_proj <- read_rds(file.path(results_path, "density_obs_proj.rds")) %>% 
+#       mutate(year = year + min(years_proj) - 1,
+#              patch = patch + min(patches) - 1) %>% 
+#       filter(year < 2017)
+#     
+#     tmp_edges <- read_rds(file.path(results_path, "range_quantiles_proj.rds")) %>% 
+#       mutate(year = year + min(years_proj) - 1,
+#              range_quantiles_proj = range_quantiles_proj + min(patches) - 1) %>% 
+#       filter(range_quantiles_proj < Inf,
+#              year < 2017)
+#     
+#     tmp_centroids <- read_rds(file.path(results_path, "centroid_proj.rds"))%>% 
+#       mutate(year = year + min(years_proj) - 1) %>% 
+#       filter(year < 2017)
+#     
     # gg_range_time_drm <- ggplot() +
     #   stat_lineribbon(data = tmp_edges[tmp_edges$quantile==0.05,], aes(x=year, y=range_quantiles_proj))+ 
     #   stat_lineribbon(data = tmp_edges[tmp_edges$quantile==0.95,], aes(x=year, y=range_quantiles_proj))+ 
@@ -338,70 +370,74 @@ if(drm_outputs_available_locally == TRUE) {
     #   theme_bw()
     # ggsave(gg_range_time_drm, filename=paste0(here("results"),"/range_time_",k,".png"), dpi=600, units="mm", width=130, height=75)
     
-    gg_range_time_drm_cent <- ggplot() +
-      stat_lineribbon(data = tmp_centroids, aes(x=year, y=centroid_proj))+ 
-      geom_point(data=points_for_plot %>% filter(id == "Observed", feature == 'Centroid') %>% rename("Feature" = feature), aes(x=year, y=value_tmp, shape=Feature), color="#E20134", size=2) + 
-      geom_line(data=points_for_plot %>% filter(id == "Observed", feature == 'Centroid')%>% rename("Feature" = feature), aes(x=year, y=value_tmp, group=Feature), color="#E20134") +
-      scale_fill_brewer(name = "Credible Interval") +
-      scale_x_continuous(breaks =seq(2007, 2016, 1)) + 
-      scale_y_continuous(breaks = seq(37, 40, 1), labels =  seq(37, 40, 1), limits=c(36, 41)) +
-      labs(x="Year", y="Latitude", title = paste0("Centroid, DRM ",gsub("0.", "", k))) + 
-      theme(legend.position = "bottom",
-            axis.text.x = element_text(angle = 45, vjust=0.8))
-    ggsave(gg_range_time_drm_cent, filename=paste0(here("results"),"/centroid_time_",k,".png"), dpi=600, units="mm", width=75, height=55)
+    # gg_range_time_drm_cent <- ggplot() +
+    #   stat_lineribbon(data = tmp_centroids, aes(x=year, y=centroid_proj))+ 
+    #   geom_point(data=points_for_plot %>% filter(id == "Observed", feature == 'Centroid') %>% rename("Feature" = feature), aes(x=year, y=value_tmp, shape=Feature), color="#E20134", size=2) + 
+    #   geom_line(data=points_for_plot %>% filter(id == "Observed", feature == 'Centroid')%>% rename("Feature" = feature), aes(x=year, y=value_tmp, group=Feature), color="#E20134") +
+    #   scale_fill_brewer(name = "Credible Interval") +
+    #   scale_x_continuous(breaks =seq(2007, 2016, 1)) + 
+    #   scale_y_continuous(breaks = seq(37, 40, 1), labels =  seq(37, 40, 1), limits=c(36, 41)) +
+    #   labs(x="Year", y="Latitude", title = paste0("Centroid, DRM ",gsub("0.", "", k))) + 
+    #   theme(legend.position = "bottom",
+    #         axis.text.x = element_text(angle = 45, vjust=0.8))
+    # ggsave(gg_range_time_drm_cent, filename=paste0(here("results"),"/centroid_time_",k,".png"), dpi=600, units="mm", width=75, height=55)
+    # 
+    # gg_range_time_drm_cold <- ggplot() +
+    #   stat_lineribbon(data = tmp_edges[tmp_edges$quantile==0.95,], aes(x=year, y=range_quantiles_proj))+ 
+    #   geom_point(data=points_for_plot %>% filter(id == "Observed", feature == 'Cold Edge') %>% rename("Feature" = feature), aes(x=year, y=value_tmp, shape=Feature), color="#E20134", size=2) + 
+    #   geom_line(data=points_for_plot %>% filter(id == "Observed", feature == 'Cold Edge')%>% rename("Feature" = feature), aes(x=year, y=value_tmp, group=Feature), color="#E20134") +
+    #   scale_fill_brewer(name = "Credible Interval") +
+    #   scale_x_continuous(breaks =seq(2007, 2016, 1)) + 
+    #   scale_y_continuous(breaks = seq(38, 44, 1), labels =  seq(38, 44, 1), limits=c(38, 44.1)) +
+    #   labs(x="Year", y="Latitude", title = paste0("Cold edge, DRM ",gsub("0.", "", k))) + 
+    #   theme(legend.position = "bottom",
+    #         axis.text.x = element_text(angle = 45, vjust=0.8))
+    # ggsave(gg_range_time_drm_cold, filename=paste0(here("results"),"/cold_edge_time_",k,".png"), dpi=600, units="mm", width=75, height=55)
+    # 
+    # gg_range_time_drm_warm <- ggplot() +
+    #   stat_lineribbon(data = tmp_edges[tmp_edges$quantile==0.05,], aes(x=year, y=range_quantiles_proj))+ 
+    #   geom_point(data=points_for_plot %>% filter(id == "Observed", feature == 'Warm Edge') %>% rename("Feature" = feature), aes(x=year, y=value_tmp, shape=Feature), color="#E20134", size=2) + 
+    #   geom_line(data=points_for_plot %>% filter(id == "Observed", feature == 'Warm Edge')%>% rename("Feature" = feature), aes(x=year, y=value_tmp, group=Feature), color="#E20134") +
+    #   scale_fill_brewer(name = "Credible Interval") +
+    #   scale_x_continuous(breaks =seq(2007, 2016, 1)) + 
+    #   scale_y_continuous(breaks = seq(35, 38, 1), labels =  seq(35, 38, 1), limits=c(34, 39)) +
+    #   labs(x="Year", y="Latitude", title = paste0("Warm edge, DRM ",gsub("0.", "", k))) + 
+    #   theme(legend.position = "bottom",
+    #         axis.text.x = element_text(angle = 45, vjust=0.8))
+    # ggsave(gg_range_time_drm_warm, filename=paste0(here("results"),"/warm_edge_time_",k,".png"), dpi=600, units="mm", width=75, height=55)
     
-    gg_range_time_drm_cold <- ggplot() +
-      stat_lineribbon(data = tmp_edges[tmp_edges$quantile==0.95,], aes(x=year, y=range_quantiles_proj))+ 
-      geom_point(data=points_for_plot %>% filter(id == "Observed", feature == 'Cold Edge') %>% rename("Feature" = feature), aes(x=year, y=value_tmp, shape=Feature), color="#E20134", size=2) + 
-      geom_line(data=points_for_plot %>% filter(id == "Observed", feature == 'Cold Edge')%>% rename("Feature" = feature), aes(x=year, y=value_tmp, group=Feature), color="#E20134") +
-      scale_fill_brewer(name = "Credible Interval") +
-      scale_x_continuous(breaks =seq(2007, 2016, 1)) + 
-      scale_y_continuous(breaks = seq(38, 44, 1), labels =  seq(38, 44, 1), limits=c(38, 44.1)) +
-      labs(x="Year", y="Latitude", title = paste0("Cold edge, DRM ",gsub("0.", "", k))) + 
-      theme(legend.position = "bottom",
-            axis.text.x = element_text(angle = 45, vjust=0.8))
-    ggsave(gg_range_time_drm_cold, filename=paste0(here("results"),"/cold_edge_time_",k,".png"), dpi=600, units="mm", width=75, height=55)
+    # gg_est_tile_drm <- tmp_dens_proj %>%
+    #   group_by(patch, year) %>% 
+    #   summarise(Abundance = mean(density_obs_proj)) %>% 
+    #   rename("Latitude" = patch, "Year" = year) %>% 
+    #   ggplot(aes(x=Year, y=Latitude, fill=Abundance)) +
+    #   geom_tile() +
+    #   scale_x_continuous(breaks=seq(min(years_proj), max(years_proj), 1)) +
+    #   scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
+    #   #     scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
+    #   labs(x="Year", y="Latitude", title = paste0("DRM ",gsub("0.", "", k))) + 
+    #   theme(legend.position="none",
+    #         axis.text.x = element_text(angle = 45, vjust=0.8)) +
+    #   NULL
+    # ggsave(gg_est_tile_drm, filename=paste0(here("results"),"/tileplot_time_",k,".png"), dpi=600, units="mm", width=75, height=75)
     
-    gg_range_time_drm_warm <- ggplot() +
-      stat_lineribbon(data = tmp_edges[tmp_edges$quantile==0.05,], aes(x=year, y=range_quantiles_proj))+ 
-      geom_point(data=points_for_plot %>% filter(id == "Observed", feature == 'Warm Edge') %>% rename("Feature" = feature), aes(x=year, y=value_tmp, shape=Feature), color="#E20134", size=2) + 
-      geom_line(data=points_for_plot %>% filter(id == "Observed", feature == 'Warm Edge')%>% rename("Feature" = feature), aes(x=year, y=value_tmp, group=Feature), color="#E20134") +
-      scale_fill_brewer(name = "Credible Interval") +
-      scale_x_continuous(breaks =seq(2007, 2016, 1)) + 
-      scale_y_continuous(breaks = seq(35, 38, 1), labels =  seq(35, 38, 1), limits=c(34, 39)) +
-      labs(x="Year", y="Latitude", title = paste0("Warm edge, DRM ",gsub("0.", "", k))) + 
-      theme(legend.position = "bottom",
-            axis.text.x = element_text(angle = 45, vjust=0.8))
-    ggsave(gg_range_time_drm_warm, filename=paste0(here("results"),"/warm_edge_time_",k,".png"), dpi=600, units="mm", width=75, height=55)
+    # gg_dens_proj_by_patch_drm <- tmp_dens_proj %>% 
+    #   ggplot(aes(year, density_obs_proj)) + 
+    #   stat_lineribbon() +
+    #   geom_point(data = dat_test_dens |> mutate(year = year + min(years_proj) - 1, patch = lat_floor), aes(year, mean_dens), color = "red") +
+    #   facet_wrap(~patch, scales = "free_y") +
+    #   labs(x="Year",y="Density") + 
+    #   scale_fill_brewer()
+    # ggsave(gg_dens_proj_by_patch_drm, filename=paste0(here("results"),"/drm_proj_dens_by_patch_",k,".png"), dpi=600, units="mm", width=75, height=55)
     
-    gg_est_tile_drm <- tmp_dens_proj %>%
-      group_by(patch, year) %>% 
-      summarise(Abundance = mean(density_obs_proj)) %>% 
-      rename("Latitude" = patch, "Year" = year) %>% 
-      ggplot(aes(x=Year, y=Latitude, fill=Abundance)) +
-      geom_tile() +
-      scale_x_continuous(breaks=seq(min(years_proj), max(years_proj), 1)) +
-      scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
-      #     scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
-      labs(x="Year", y="Latitude", title = paste0("DRM ",gsub("0.", "", k))) + 
-      theme(legend.position="none",
-            axis.text.x = element_text(angle = 45, vjust=0.8)) +
-      NULL
-    ggsave(gg_est_tile_drm, filename=paste0(here("results"),"/tileplot_time_",k,".png"), dpi=600, units="mm", width=75, height=75)
-    
-    gg_dens_proj_by_patch_drm <- tmp_dens_proj %>% 
-      ggplot(aes(year, density_obs_proj)) + 
-      stat_lineribbon() +
-      geom_point(data = dat_test_dens |> mutate(year = year + min(years_proj) - 1, patch = lat_floor), aes(year, mean_dens), color = "red") +
-      facet_wrap(~patch, scales = "free_y") +
-      labs(x="Year",y="Density") + 
-      scale_fill_brewer()
-    ggsave(gg_dens_proj_by_patch_drm, filename=paste0(here("results"),"/drm_proj_dens_by_patch_",k,".png"), dpi=600, units="mm", width=75, height=55)
-    
-  } 
-}
+#  } 
+#}
 
-# final plot for MS 
+
+############
+# make best DRM time-series plots  
+############
+
 results_path <-here('results/v0.40')
 drm_dens_proj <- read_rds(file.path(results_path, "density_obs_proj.rds")) %>% 
   mutate(year = year + min(years_proj) - 1,
@@ -497,74 +533,66 @@ gg_best_drm <- gg_best_drm_centroid + gg_best_drm_cold_edge + gg_best_drm_warm_e
 
 ggsave(gg_best_drm, filename=here("results", "best_drm_time.png"), dpi=600, units="mm", width=75, height=130, scale = 2)
 
+# gg_est_tile_drm <- tmp_dens_proj %>%
+#   group_by(patch, year) %>% 
+#   summarise(Abundance = mean(density_obs_proj)) %>% 
+#   rename("Latitude" = patch, "Year" = year) %>% 
+#   ggplot(aes(x=Year, y=Latitude, fill=Abundance)) +
+#   geom_tile() +
+#   scale_x_continuous(breaks=seq(min(years_proj), max(years_proj), 1)) +
+#   scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
+#   #     scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
+#   labs(x="Year", y="Latitude", title = paste0("DRM ",gsub("0.", "", k))) + 
+#   theme(legend.position="none",
+#         axis.text.x = element_text(angle = 45, vjust=0.8)) +
+#   NULL
+# ggsave(gg_est_tile_drm, filename=paste0(here("results"),"/tileplot_time_",k,".png"), dpi=600, units="mm", width=75, height=75)
 
-
-
-
-
-
-
-
-gg_est_tile_drm <- tmp_dens_proj %>%
-  group_by(patch, year) %>% 
-  summarise(Abundance = mean(density_obs_proj)) %>% 
-  rename("Latitude" = patch, "Year" = year) %>% 
-  ggplot(aes(x=Year, y=Latitude, fill=Abundance)) +
-  geom_tile() +
-  scale_x_continuous(breaks=seq(min(years_proj), max(years_proj), 1)) +
-  scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
-  #     scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
-  labs(x="Year", y="Latitude", title = paste0("DRM ",gsub("0.", "", k))) + 
-  theme(legend.position="none",
-        axis.text.x = element_text(angle = 45, vjust=0.8)) +
-  NULL
-ggsave(gg_est_tile_drm, filename=paste0(here("results"),"/tileplot_time_",k,".png"), dpi=600, units="mm", width=75, height=75)
-
-gg_dens_proj_by_patch_drm <- tmp_dens_proj %>% 
-  ggplot(aes(year, density_obs_proj)) + 
-  stat_lineribbon() +
-  geom_point(data = dat_test_dens |> mutate(year = year + min(years_proj) - 1, patch = lat_floor), aes(year, mean_dens), color = "red") +
-  facet_wrap(~patch, scales = "free_y") +
-  labs(x="Year",y="Density") + 
-  scale_fill_brewer()
-ggsave(gg_dens_proj_by_patch_drm, filename=paste0(here("results"),"/drm_proj_dens_by_patch_",k,".png"), dpi=600, units="mm", width=75, height=55)
-
-gg_observed_proj_dens_tile <- dat_test_dens %>%
-  mutate(Year = (year + min(years_proj) - 1), Latitude = lat_floor, Density=mean_dens) %>%
-  ggplot(aes(x=Year, y=Latitude, fill=Density)) +
-  geom_tile() +
-  scale_x_continuous(breaks=seq(min(years_proj), max(years_proj), 1)) +
-  scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
-  #  scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
-  labs(title="Density (data)") +
-  theme(legend.position = "none",
-        axis.text.x = element_text(angle = 45, vjust=0.8))
-ggsave(gg_observed_proj_dens_tile, filename=paste0(here("results"),"/tileplot_time_observed.png"), dpi=600, units="mm", width=75, height=75)
-
-gg_persistence_tile <- expand_grid(patches, years_proj) %>% 
-  rename("Year" = years_proj, "Latitude" = patches) %>% 
-  left_join(dat_train_dens %>% 
-              filter(year == max(year)) %>% 
-              select(-year, -patch) %>% 
-              rename("Latitude" = lat_floor, "Abundance"=mean_dens)) %>% 
-  ggplot(aes(x=Year, y=Latitude, fill=Abundance)) +
-  geom_tile() +
-  scale_x_continuous(breaks=seq(min(years_proj), max(years_proj), 1)) +
-  scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
-  #  scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
-  labs(title="Persistence") +
-  theme(legend.position = "none",
-        axis.text.x = element_text(angle = 45, vjust=0.8))
-ggsave(gg_persistence_tile, filename=paste0(here("results"),"/tileplot_time_persistence.png"), dpi=600, units="mm", width=75, height=75)
-
-gg_gam_tile <- gam_out %>% 
-  rename("Latitude" = lat_floor, "Year" = year, "Abundance" = dens_pred) %>% 
-  ggplot(aes(x=Year, y=Latitude, fill=Abundance)) +
-  geom_tile() +
-  scale_x_continuous(breaks=seq(min(years_proj), max(years_proj), 1)) +
-  scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
-  #  scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
-  labs(title="GAM") +
-  theme(legend.position = "none",
-        axis.text.x = element_text(angle = 45, vjust=0.8))
-ggsave(gg_gam_tile, filename=paste0(here("results"),"/tileplot_time_gam.png"), dpi=600, units="mm", width=75, height=75)
+# gg_dens_proj_by_patch_drm <- tmp_dens_proj %>% 
+#   ggplot(aes(year, density_obs_proj)) + 
+#   stat_lineribbon() +
+#   geom_point(data = dat_test_dens |> mutate(year = year + min(years_proj) - 1, patch = lat_floor), aes(year, mean_dens), color = "red") +
+#   facet_wrap(~patch, scales = "free_y") +
+#   labs(x="Year",y="Density") + 
+#   scale_fill_brewer()
+# ggsave(gg_dens_proj_by_patch_drm, filename=paste0(here("results"),"/drm_proj_dens_by_patch_",k,".png"), dpi=600, units="mm", width=75, height=55)
+# 
+# gg_observed_proj_dens_tile <- dat_test_dens %>%
+#   mutate(Year = (year + min(years_proj) - 1), Latitude = lat_floor, Density=mean_dens) %>%
+#   ggplot(aes(x=Year, y=Latitude, fill=Density)) +
+#   geom_tile() +
+#   scale_x_continuous(breaks=seq(min(years_proj), max(years_proj), 1)) +
+#   scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
+#   #  scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
+#   labs(title="Density (data)") +
+#   theme(legend.position = "none",
+#         axis.text.x = element_text(angle = 45, vjust=0.8))
+# ggsave(gg_observed_proj_dens_tile, filename=paste0(here("results"),"/tileplot_time_observed.png"), dpi=600, units="mm", width=75, height=75)
+# 
+# gg_persistence_tile <- expand_grid(patches, years_proj) %>% 
+#   rename("Year" = years_proj, "Latitude" = patches) %>% 
+#   left_join(dat_train_dens %>% 
+#               filter(year == max(year)) %>% 
+#               select(-year, -patch) %>% 
+#               rename("Latitude" = lat_floor, "Abundance"=mean_dens)) %>% 
+#   ggplot(aes(x=Year, y=Latitude, fill=Abundance)) +
+#   geom_tile() +
+#   scale_x_continuous(breaks=seq(min(years_proj), max(years_proj), 1)) +
+#   scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
+#   #  scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
+#   labs(title="Persistence") +
+#   theme(legend.position = "none",
+#         axis.text.x = element_text(angle = 45, vjust=0.8))
+# ggsave(gg_persistence_tile, filename=paste0(here("results"),"/tileplot_time_persistence.png"), dpi=600, units="mm", width=75, height=75)
+# 
+# gg_gam_tile <- gam_out %>% 
+#   rename("Latitude" = lat_floor, "Year" = year, "Abundance" = dens_pred) %>% 
+#   ggplot(aes(x=Year, y=Latitude, fill=Abundance)) +
+#   geom_tile() +
+#   scale_x_continuous(breaks=seq(min(years_proj), max(years_proj), 1)) +
+#   scale_y_continuous(breaks=seq(min(patches), max(patches), 1)) +
+#   #  scale_fill_continuous(labels = scales::comma) + # fine to comment this out if you don't have the package installed, it just makes the legend pretty
+#   labs(title="GAM") +
+#   theme(legend.position = "none",
+#         axis.text.x = element_text(angle = 45, vjust=0.8))
+# ggsave(gg_gam_tile, filename=paste0(here("results"),"/tileplot_time_gam.png"), dpi=600, units="mm", width=75, height=75)
