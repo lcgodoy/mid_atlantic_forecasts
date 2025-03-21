@@ -265,7 +265,7 @@ gg_observed <- dat_test_dens %>%
   scale_fill_viridis_c() + 
   guides(fill = guide_colorbar(theme = theme(legend.direction = "horizontal"))) +
   theme(legend.position = c(0.3, 0.83), 
-        axis.text.x = element_text(angle = 45, vjust=0.8)) +
+        axis.text.x = element_text(angle = 45, vjust=0.8)) + 
   coord_cartesian(expand = FALSE) +
   NULL
 ggsave(gg_observed, filename=paste0(here("results"),"/tileplot_timeseries.png"), dpi=600, units="mm", width=75, height=50, scale = 1.7)
@@ -280,32 +280,39 @@ dat_mod_compare <- dat_forecasts_summ  %>%
   mutate(feature = case_match(feature, "centroid" ~ "Centroid", "warm_edge" ~ "Warm Edge", "cold_edge" ~ "Cold Edge", .default=feature),
          type = ifelse(str_detect(name, "DRM"),"DRM", name))
 
-name_order <- dat_mod_compare |> 
-  filter(metric=="Bias") |> 
-  group_by(name) |> 
-  summarise(avg = mean(abs(value))) |> 
-  arrange(avg) |> 
-  pull(name)
+# name_order <- dat_mod_compare |> 
+#   filter(metric=="Bias") |> 
+#   group_by(name) |> 
+#   summarise(avg = mean(abs(value))) |> 
+#   arrange(avg) |> 
+#   pull(name)
 
 gg_mod_compare <- dat_mod_compare %>%  
   mutate(
     metric = factor(metric, levels = c("RMSE","Bias")),
-    name = factor(name, levels = name_order)
+    name = factor(name, levels = c("Persistence", "GAM", "DRM T-movement", "DRM T-mortality","DRM T-recruit","DRM null" )),
+    feature = factor(feature, levels = c("Cold Edge", "Centroid", "Warm Edge"))
     #   name = reorder_within(name, value, list(metric, feature)) # this option ranks each subplot by its score so the points are sequential in value along the plot
   ) %>%  
   ggplot( )+
   geom_point(aes(name, y=value, shape = type)) + 
   geom_hline(yintercept=0, linetype="dashed") + 
   coord_flip() + 
-  scale_x_reordered() +
-  scale_y_continuous(expand = c(0,0)) +
+#  scale_x_reordered() +
+  scale_y_continuous(expand = c(0,0.4)) +
   theme_bw() + 
   facet_grid(feature ~ metric, scales="free", axes="all_y", axis.labels = "all_y") +
   theme(axis.title.x = element_blank(), 
         axis.title.y = element_blank(),
         axis.text.x = element_text(angle = 45),
         legend.position = "none") +
-  ggh4x::facet_nested_wrap(~metric+feature, scales = "free") 
+  ggh4x::facet_nested_wrap(~metric+feature, scales = "free") +
+  ggh4x::facetted_pos_scales(
+    x = list(COL == 2 ~ scale_x_discrete(guide = 'none'),
+             COL == 3 ~ scale_x_discrete(guide = 'none'))
+  ) +
+  NULL
+gg_mod_compare
 ggsave(gg_mod_compare, filename=here("results","bias_v_rmse.png"), width=110, height=80, dpi=600, units="mm", scale=1.5)
 
 # ctrl_dat <- ctrl_file %>% 
