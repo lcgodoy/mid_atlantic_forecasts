@@ -458,10 +458,10 @@ drm_dens_proj <- read_rds(file.path(results_path, "density_obs_proj.rds")) %>%
   filter(year < 2017)
 
 drm_edges <- read_rds(file.path(results_path, "range_quantiles_proj.rds")) %>% 
-  mutate(year = year + min(years_proj) - 1,
-         range_quantiles_proj = range_quantiles_proj + min(patches) - 1) %>% 
   filter(range_quantiles_proj < Inf,
-         year < 2017)
+         year < 2017) %>% 
+  mutate(year = year + min(years_proj) - 1,
+         range_quantiles_proj = range_quantiles_proj + min(patches)) 
 
 drm_centroids <- read_rds(file.path(results_path, "centroid_proj.rds"))%>% 
   mutate(year = year + min(years_proj) - 1) %>% 
@@ -543,7 +543,7 @@ gg_best_drm_warm_edge <- ggplot() +
 gg_best_drm_warm_edge
 
 gg_best_drm <- gg_best_drm_centroid + gg_best_drm_cold_edge + gg_best_drm_warm_edge + plot_layout(ncol=1)
-
+gg_best_drm
 ggsave(gg_best_drm, filename=here("results", "best_drm_time.png"), dpi=600, units="mm", width=75, height=130, scale = 2)
 
 # gg_est_tile_drm <- tmp_dens_proj %>%

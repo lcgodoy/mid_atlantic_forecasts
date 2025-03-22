@@ -248,22 +248,22 @@ if(run_in_parallel == TRUE) {
     results_path <- here(paste0("results/", tmpdat$id))
     
     tmp_model <- tryCatch(read_rds(file.path(results_path, "stan_model_fit.rds")), error = function(e) return(NULL))
-    if (is.null(tmp_model)) next
-    
     
     density_obs_proj <- tidybayes::spread_draws(tmp_model, density_obs_proj[patch,year])
     
     centroid_proj <- tidybayes::spread_draws(tmp_model, centroid_proj[year]) 
+    
     range_quantiles_proj <- tidybayes::spread_draws(tmp_model, range_quantiles_proj[quantile, year]) %>%
       mutate(quantile = as.factor(quantiles_calc[quantile]), .keep="unused") 
+    
     density_hat <- tidybayes::spread_draws(tmp_model, density_hat[patch,year])
     
     range_quantiles <- tidybayes::spread_draws(tmp_model, range_quantiles[quantile, year]) %>%
       mutate(quantile = as.factor(quantiles_calc[quantile]), .keep="unused") 
+    
     # save those posteriors
     write_rds(density_obs_proj, file.path(results_path, "density_obs_proj.rds"))
     write_rds(density_hat, file.path(results_path, "density_hat.rds"))
-    
     write_rds(range_quantiles_proj, file.path(results_path, "range_quantiles_proj.rds"))
     write_rds(range_quantiles, file.path(results_path, "range_quantiles.rds"))
     
@@ -298,6 +298,19 @@ if(run_in_parallel == TRUE) {
              resid_sq = resid^2, 
              name = tmpdat$name) %>% 
       select(-range_quantiles_proj, -value, -quantile)
+    
+    boop <- range_quantiles_proj %>% 
+      filter(range_quantiles_proj < Inf, quantile == 0.95) %>%  
+      mutate(
+        year = year + min(years_proj) - 1, 
+        range_quantiles_proj = range_quantiles_proj + min(patches)) %>% 
+      left_join(dat_test_patch %>% filter(feature == "cold_edge")) %>% 
+      mutate(resid = range_quantiles_proj - value,
+             resid_sq = resid^2, 
+             name = tmpdat$name) %>% 
+      select(-value, -quantile) |> 
+      group_by(year) |> 
+      summarise(medlat = median(range_quantiles_proj))
     
     bind_rows(centroid_tmp, warm_edge_tmp, cold_edge_tmp)
   }
