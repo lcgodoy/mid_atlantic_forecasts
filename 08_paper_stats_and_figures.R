@@ -450,8 +450,10 @@ ggsave(gg_mod_compare, filename=here("results","bias_v_rmse.png"), width=110, he
 ############
 # make best DRM time-series plots  
 ############
+mods_to_show <- c("v0.40", "v0.41")
 
-results_path <-here('results/v0.40')
+generate_drm_ribbon_plots <- function(modname){
+results_path <-here("results",paste0(modname))
 drm_dens_proj <- read_rds(file.path(results_path, "density_obs_proj.rds")) %>% 
   mutate(year = year + min(years_proj) - 1,
          patch = patch + min(patches) - 1) %>% 
@@ -479,16 +481,18 @@ gg_best_drm_centroid <- ggplot() +
    stat_lineribbon(data = drm_centroids, aes(x=year, y=centroid_proj)) + 
   geom_line(data = centroids_for_ribbon_plot, 
             aes(x=Year, y=Latitude, color=name), lwd = 1) + 
-  scale_x_continuous(breaks =seq(2007, 2016, 1)) + 
+  scale_x_continuous(breaks =seq(2007, 2016, 1), limits=c(2007, 2016)) + 
   scale_y_continuous(breaks = seq(37, 39, 1), labels =  seq(37, 39, 1), limits=c(36.5, 40)) +
   scale_color_manual(values=c("black", "#E20134","#8400CD","#009F81"), name="") + 
 #  scale_fill_manual(values=c("#E20134","#8400CD","#009F81"), name="") + 
  scale_fill_brewer(#name = "Credible Interval", 
                    guide = "none") +
-  labs(x="Year", y="Latitude", title = "Centroid") + 
-  theme(legend.position = "bottom",
-        axis.text.x = element_text(angle = 45, vjust=0.8), 
-        plot.title = element_text(hjust = 0.05, vjust = -10))
+  labs(x=NULL, y="Latitude", title = "Centroid") + 
+  theme_bw() +
+  theme(legend.position = "none",
+        axis.text.x = element_blank(), 
+        plot.title = element_text(hjust = 0.95, vjust = -26.5),
+        plot.margin = unit(c(.1,.1,.1,.1), "cm"))
 gg_best_drm_centroid
 
 cold_edges_for_ribbon_plot <- drm_edges |> 
@@ -504,16 +508,18 @@ gg_best_drm_cold_edge <- ggplot() +
   stat_lineribbon(data = drm_edges |> filter(quantile == 0.95), aes(x=year, y=range_quantiles_proj)) + 
   geom_line(data = cold_edges_for_ribbon_plot, 
             aes(x=Year, y=Latitude, color=name), lwd = 1) + 
-  scale_x_continuous(breaks =seq(2007, 2016, 1)) + 
+  scale_x_continuous(breaks =seq(2007, 2016, 1), limits=c(2007, 2016)) + 
   scale_y_continuous(breaks = seq(38, 44, 1), labels =  seq(38, 44, 1), limits=c(38, 44)) +
   scale_color_manual(values=c("black", "#E20134","#8400CD","#009F81"), name="") + 
   #  scale_fill_manual(values=c("#E20134","#8400CD","#009F81"), name="") + 
   scale_fill_brewer(#name = "Credible Interval", 
     guide = "none") +
-  labs(x="Year", y="Latitude", title = "Cold  Edge") + 
-  theme(legend.position = "bottom",
-        axis.text.x = element_text(angle = 45, vjust=0.8), 
-        plot.title = element_text(hjust = 0.05, vjust = -10))
+  labs(x=NULL, y="Latitude", title = "Cold  Edge") + 
+  theme_bw() +
+  theme(legend.position = "none",
+        axis.text.x = element_blank(), 
+        plot.title = element_text(hjust = 0.95, vjust = -26.5),
+        plot.margin = unit(c(.1,.1,.1,.1), "cm"))
 gg_best_drm_cold_edge
 
 warm_edges_for_ribbon_plot <- drm_edges |> 
@@ -529,7 +535,7 @@ gg_best_drm_warm_edge <- ggplot() +
   stat_lineribbon(data = drm_edges |> filter(quantile == 0.05), aes(x=year, y=range_quantiles_proj)) + 
   geom_line(data = warm_edges_for_ribbon_plot, 
             aes(x=Year, y=Latitude, color=name), lwd = 1) + 
-  scale_x_continuous(breaks =seq(2007, 2016, 1)) + 
+  scale_x_continuous(breaks =seq(2007, 2016, 1), limits=c(2007, 2016)) + 
   scale_y_continuous(breaks = seq(34, 38, 1), labels =  seq(34, 38, 1), 
                      limits=c(33.5, 38.5)) +
   scale_color_manual(values=c("black", "#E20134","#8400CD","#009F81"), name="") + 
@@ -537,14 +543,23 @@ gg_best_drm_warm_edge <- ggplot() +
   scale_fill_brewer(#name = "Credible Interval", 
     guide = "none") +
   labs(x="Year", y="Latitude", title = "Warm  Edge") + 
+  theme_bw() +
   theme(legend.position = "bottom",
         axis.text.x = element_text(angle = 45, vjust=0.8), 
-        plot.title = element_text(hjust = 0.05, vjust = -10))
+        plot.title = element_text(hjust = 0.95, vjust = -26.5),
+        plot.margin = unit(c(.1,.1,.1,.1), "cm")) 
 gg_best_drm_warm_edge
 
-gg_best_drm <- gg_best_drm_centroid + gg_best_drm_cold_edge + gg_best_drm_warm_edge + plot_layout(ncol=1)
+gg_out <- gg_best_drm_cold_edge + gg_best_drm_centroid + gg_best_drm_warm_edge + plot_layout(ncol=1)
+return(gg_out)}
+
+gg_best_drm <- (wrap_elements(panel = grid::textGrob("DRM T-Recruit")) + wrap_elements(panel = grid::textGrob("DRM T-Mortality"))) / (generate_drm_ribbon_plots(mods_to_show[1]) | generate_drm_ribbon_plots(mods_to_show[2]))+
+  plot_layout(heights = c(.05,1,1))
+                                                                                                                                      
 gg_best_drm
-ggsave(gg_best_drm, filename=here("results", "best_drm_time.png"), dpi=600, units="mm", width=75, height=130, scale = 2)
+ 
+
+ggsave(gg_best_drm, filename=here("results", "best_drm_time.svg"), dpi=600, units="mm", width=75, height=130, scale = 2)
 
 # gg_est_tile_drm <- tmp_dens_proj %>%
 #   group_by(patch, year) %>% 
