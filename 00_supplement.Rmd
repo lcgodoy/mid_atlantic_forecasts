@@ -120,3 +120,75 @@ out %>%
 # quantile(extract(stan_model_fit, "Topt")$Topt)
 
 ```
+
+```{r tbl-pars-stan}
+param_table_df <- data.frame(
+  Description = c(
+    "Recorded density",
+    "SD of density at the log-scale",
+    "Natural mortality rate",
+    "Fishing mortality rate",
+    "Intercept for detection probability",
+    "Coefficient linking detection probability to density",
+    "Overall average recruitment",
+    "Conditional variance in the AR(1) process",
+    "White noise used in the AR(1) process",
+    "Autcorrelation from AR(1) term",
+    "Excess in natural mortality due to temperature",
+    "Isotropic dispersal rate",
+    "Sea bottom temperature",
+    "How much tax per unit of temperature",
+    "Suitability index",
+    "Temperature optimizing $I_{p, t}$",
+    "Width parameter from $I_{p, t}$"
+  ),
+  Paper = c(
+    "$D_{p, t}$",
+    "$\\sigma_{\\mathrm{obs}}$",
+    "$m$",
+    "$f_{a, t}$",
+    "$\\beta_0$",
+    "$\\beta_1$",
+    "$\\mu$",
+    "$\\sigma_{\\mathrm{proc}}$",
+    "$z_t$",
+    "$\\alpha$",
+    "$\\gamma$",
+    "$\\delta$",
+    "$T_{p, t}$",
+    "$\\beta_{tax}$",
+    "$I_{p, t}$",
+    "$\\tau$",
+    "$\\omega$"
+  ),
+  Code = c(
+    "`dens`",
+    "`sigma_obs`",
+    "`m`",
+    "`f`",
+    "`beta_obs_int`",
+    "`beta_obs`",
+    "`mean_recruits`",
+    "`sigma_r`",
+    "`raw`",
+    "`alpha`",
+    "`m_e`",
+    "`d`",
+    "`sbt`",
+    "`beta_t`",
+    "`T_adjust`",
+    "`Topt`",
+    "`width`"
+  ),
+  stringsAsFactors = FALSE
+)
+
+kbl(param_table_df,
+    escape = FALSE,
+    align = "lcc",
+    booktabs = TRUE,
+    caption = "Correspondence between parameter from the manuscript and `Stan` variables.") |>
+  kable_styling(font_size = 8,
+                latex_options = c("striped"),
+                full_width = TRUE)
+```
