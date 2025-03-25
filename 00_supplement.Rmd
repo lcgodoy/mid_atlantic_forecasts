@@ -27,8 +27,13 @@ dat_test <- read_csv(here("processed-data","flounder_catch_at_length_fall_testin
 dat_catchonly <- read_csv(here("processed-data","flounder_catch_fall_training.csv"))
 dat_test_catchonly <- read_csv(here("processed-data","flounder_catch_fall_testing.csv"))
 convergence_checks <- read_csv(file=here("results","convergence_checks.csv"))
-ctrl_file <- read_csv(file=here("control_file.csv"))
-best_models <- slice(ctrl_file, 60:64) # PLACEHOLDER!!!!!!!!!!!!!!!!!!!!!!!!!!
+ctrl_file <- read_csv(file=here("ctrl_file_used.csv"))
+load(here("processed-data","stan_data_prep.Rdata"))
+
+# drm_outputs_available_locally <- TRUE
+# 
+# if(drm_outputs_available_locally){
+#   drm_out <- read_csv(here("processed-data","posteriors_for_model_evaluation.csv")) }
 ```
 
 ```{r opts, setup2, include=FALSE}
@@ -38,25 +43,85 @@ knitr::opts_chunk$set(
 #knitr::opts_knit$set(eval.after = "fig.cap")
 ```
 
-# Tables 
 
-```{r tbl-surveys}
-ctrl_dat <- ctrl_file %>% 
-  select(-id, -do_dirichlet, -exp_yn, -known_historic_f, -description) 
+```{r priors}
+boop <- rbind(
+  data.frame(Parameter = "$\\beta_{obs,1}$", `Prior Distribution` = "Normal $\\sim (0.001, 0.1)$"),
+  data.frame(Parameter = "$\\beta_{obs,0}$", `Prior Distribution` = "Normal $\\sim (-100, 4)$"),
+  data.frame(Parameter = "$z$", `Prior Distribution` = "Normal $\\sim (0, 1)$"),
+  data.frame(Parameter = "$\\sigma_{proc}$", `Prior Distribution` = "Normal $\\sim (0.2, 0.1)$"),
+  data.frame(Parameter = "$\\sigma_{obs}$", `Prior Distribution` = "Normal $\\sim (0.21, 0.2)$"),
+  data.frame(Parameter = "$width$", `Prior Distribution` = "Normal $\\sim (4, 2)$"),
+  data.frame(Parameter = "$T_{opt}$", `Prior Distribution` = "Normal $\\sim (18, 2)$"),
+  data.frame(Parameter = "$d$", `Prior Distribution` = "Normal $\\sim (0.01, 0.1)$"),
+  data.frame(Parameter = "$\\beta_{tax}$", `Prior Distribution` = "Normal $\\sim (0, 2)$"),
+  data.frame(Parameter = "$\\alpha$", `Prior Distribution` = "Beta $\\sim (12, 20)$"),
+  data.frame(Parameter = "$\\mu_r$", `Prior Distribution` = "Lognormal $\\sim (7, 5)$"),
+  data.frame(Parameter = "$m_e$", `Prior Distribution` = "Exponential $\\sim 2.3$")
+)
 
-ctrl_dat <- cbind(id = ctrl_file$id, data.frame(ifelse(ctrl_dat == 0, "No", "Yes"))) 
+# leaving out init_dep, selectivity parameters, and m (its prior is just m) 
 
-ctrl_dat <- left_join(ctrl_dat, convergence_checks %>% select(-low_ebfmi))
-
-ctrl_dat %>% 
-  kbl(booktabs=TRUE, col.names=c("ID","Fit to Length","Movement ~ T","Recruitment ~ T", "Mortality ~ T", "Spawner-Recruit Rel.","Process Error", "Known F", "No. Successful Chains", "Mean Divergences"), caption="Description of dynamic range model (DRM) configurations used in the analysis. Model options included fitting to length data; including a temperature effect on movement, recruitment, or mortality; fitting a spawner-recruit relationship (i.e., positive density dependence); including a process error term; and using fishing mortality values from the summer flounder stock assessment. Two forms of model diagnostics are also reported: the number of successful chains (out of four) and the proportion of divergent iterations after warm-up.", digits=3) %>%
-  kable_styling(font_size = 6, latex_options = c("striped"), full_width=TRUE)
+kbl(boop, booktabs = TRUE, caption = "Hyperparameters used in the DRM.",
+    escape = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = c("striped"), full_width=TRUE)
 ```
-\clearpage
 
-# Figures 
+```{r btemp-train}
+btemp.train.tbl <- dat_catchonly %>% 
+  select(btemp, year, lat) |> 
+  mutate(lat_floor = floor(lat)) |> 
+  group_by(lat_floor) %>%
+  nest() %>%
+  mutate(
+    model = purrr::map(data, ~lm(btemp ~ year, data = .x)), 
+    tidymodel = purrr::map(model, broom::tidy)
+  ) %>% 
+  unnest(tidymodel) %>%
+  filter(term=="year") |> 
+  dplyr::select(lat_floor, estimate, std.error, p.value ) |> 
+  mutate(
+    Estimate = round(estimate, digits=3), 
+    
+    `Standard Error` = round(std.error, digits=3), 
+    `P-value` = round(p.value, digits=3), 
+    .keep="none") |> 
+  rename(Patch = lat_floor) |> 
+  arrange(Patch)
 
-```{r haul distribution, fig.cap="Frequency distribution of summer flounder abundance in all hauls used in the analysis (testing and training data combined; *n* = 12,318)."}
+kbl(btemp.train.tbl, booktabs = TRUE, caption = "Linear regressions of sea bottom temperature (measured in the trawl surveys) on year within each patch during the model training interval (1972-2006). Values are rounded to three digits.",
+    escape = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = c("striped"), full_width=TRUE)
+```
+
+```{r btemp-test}
+btemp.test.tbl <- dat_test_catchonly %>% 
+  select(btemp, year, lat) |> 
+  mutate(lat_floor = floor(lat)) |> 
+  group_by(lat_floor) %>%
+  nest() %>%
+  mutate(
+    model = purrr::map(data, ~lm(btemp ~ year, data = .x)), 
+    tidymodel = purrr::map(model, broom::tidy)
+  ) %>% 
+  unnest(tidymodel) %>%
+  filter(term=="year") |> 
+  dplyr::select(lat_floor, estimate, std.error, p.value ) |> 
+  mutate(
+    Estimate = round(estimate, digits=3), 
+    
+    `Standard Error` = round(std.error, digits=3), 
+    `P-value` = round(p.value, digits=3), 
+    .keep="none") |> 
+  rename(Patch = lat_floor) |> 
+  arrange(Patch)
+
+kbl(btemp.test.tbl, booktabs = TRUE, caption = "Linear regressions of sea bottom temperature (measured in the trawl surveys) on year within each patch during the model testing interval (2007-2016). Values are rounded to three digits.",
+    escape = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = c("striped"), full_width=TRUE)
+```
+
+```{r frequency-distribution, fig.cap="Frequency distribution of summer flounder abundance in all hauls used in the analysis (testing and training data combined; *n* = 12,203)."}
 bind_rows(dat_catchonly, dat_test_catchonly) %>% 
   ggplot(aes(x=abundance)) +
   geom_histogram(binwidth=1) +
@@ -65,47 +130,114 @@ bind_rows(dat_catchonly, dat_test_catchonly) %>%
   theme_bw() 
 ```
 
-```{r important params, fig.cap="Posterior distributions of three important parameters from the best-fitting DRMs. These parameters are *d*, the annual dispersal rate between adjacent patches; *Topt*, the optimal temperature estimated for whichever process (movement or recruitment or mortality) was estimated as temperature-dependent; and *width*, a parameter controlling how sensitive the modeled process was to temperature. The best-fitting DRMs are described in EXPLAIN HERE."}
-out <- NULL
 
-for(i in best_models$id){
-  
-  results_path <- file.path(paste0('~/github/mid_atlantic_forecasts/results/',i))
-  
-  # get the Stan model and extract posteriors that we want for plots. slow! 
-  tmp_model <-  tryCatch(read_rds(file.path(results_path, "stan_model_fit.rds")))
-  
-  d <- gather_draws(tmp_model, d) %>% 
-    group_by(.iteration) %>% 
-    summarise(value = mean(.value)) %>%  # average across chains
-    select(value) %>% 
-    mutate(param = "d")
-  
-  Topt <- gather_draws(tmp_model, Topt) %>% 
-    group_by(.iteration) %>% 
-    summarise(value = mean(.value)) %>%  # average across chains
-    select(value) %>% 
-    mutate(param = "Topt")
-  
-  width <- gather_draws(tmp_model, width) %>% 
-    group_by(.iteration) %>% 
-    summarise(value = mean(.value)) %>%  # average across chains
-    select(value) %>% 
-    mutate(param = "width")
-  
-  tmp <- rbind(d, Topt, width) 
-  
-  tmp$id <- i
-  
-  out <- rbind(out, tmp)
-} # close for loop 
+```{r haul-distribution, fig.cap="Number of hauls per year; *n* = 12,203."}
+bind_rows(dat_catchonly, dat_test_catchonly) %>% 
+  group_by(year) |> 
+  summarise(n=n()) |> 
+  ggplot(aes(x=year, y=n)) +
+  geom_col() + 
+  labs(x="Year", y="Number of hauls") +
+  theme_bw() 
+```
 
-out %>% 
-  ggplot(aes(x=value, y=id)) +
-   geom_density_ridges() + 
+```{r null-DRM-by-patch, fig.cap="Median density estimated by the null DRM in the training dataset by patch and year (black line). Blue shading represents the 50%, 80%, and 95% credible intervals. Red points are the observed data. Note that y-axes vary by patch."}
+
+results_path <- here('results',"v0.13")
+
+density_hat_thin <- read_rds(here(results_path, "density_hat_thin.rds")) %>%  
+  mutate(year = year + min(years) - 1,
+         patch = patch + min(patches) - 1) 
+
+plot_out <- density_hat_thin %>% 
+  ggplot(aes(year, density_hat)) + 
+  stat_lineribbon() +
+  geom_point(data = dat_train_dens %>% mutate(year = year + min(years) - 1, patch = lat_floor), aes(year, mean_dens), color = "red") +
+  facet_wrap(~patch, scales = "free_y") +
+  labs(x="Year",y="Density", title = ctrl_file |> filter(id == "v0.13" ) |> pull(name)) + 
+  scale_fill_brewer() +
+  theme(legend.title = element_blank(),
+        axis.text.x = element_text(angle = 45, vjust=0.8))
+print(plot_out)
+```
+
+```{r T-recruit-DRM-by-patch, fig.cap="Median density estimated by the temperature-dependent recruitment DRM in the training dataset by patch and year (black line). Blue shading represents the 50%, 80%, and 95% credible intervals. Red points are the observed data. Note that y-axes vary by patch."}
+
+results_path <- here('results',"v0.40")
+
+density_hat_thin <- read_rds(here(results_path, "density_hat_thin.rds")) %>%  
+  mutate(year = year + min(years) - 1,
+         patch = patch + min(patches) - 1) 
+
+plot_out <- density_hat_thin %>% 
+  ggplot(aes(year, density_hat)) + 
+  stat_lineribbon() +
+  geom_point(data = dat_train_dens %>% mutate(year = year + min(years) - 1, patch = lat_floor), aes(year, mean_dens), color = "red") +
+  facet_wrap(~patch, scales = "free_y") +
+  labs(x="Year",y="Density", title = ctrl_file |> filter(id == "v0.40" ) |> pull(name)) + 
+  scale_fill_brewer() +
+  theme(legend.title = element_blank(),
+        axis.text.x = element_text(angle = 45, vjust=0.8))
+print(plot_out)
+```
+
+```{r T-mortality-DRM-by-patch, fig.cap="Median density estimated by the temperature-dependent mortality DRM in the training dataset by patch and year (black line). Blue shading represents the 50%, 80%, and 95% credible intervals. Red points are the observed data. Note that y-axes vary by patch."}
+
+results_path <- here('results',"v0.41")
+
+density_hat_thin <- read_rds(here(results_path, "density_hat_thin.rds")) %>%  
+  mutate(year = year + min(years) - 1,
+         patch = patch + min(patches) - 1) 
+
+plot_out <- density_hat_thin %>% 
+  ggplot(aes(year, density_hat)) + 
+  stat_lineribbon() +
+  geom_point(data = dat_train_dens %>% mutate(year = year + min(years) - 1, patch = lat_floor), aes(year, mean_dens), color = "red") +
+  facet_wrap(~patch, scales = "free_y") +
+  labs(x="Year",y="Density", title = ctrl_file |> filter(id == "v0.41" ) |> pull(name)) + 
+  scale_fill_brewer() +
+  theme(legend.title = element_blank(),
+        axis.text.x = element_text(angle = 45, vjust=0.8))
+print(plot_out)
+```
+
+
+```{r T-movement-DRM-by-patch, fig.cap="Median density estimated by the temperature-dependent movement DRM in the training dataset by patch and year (black line). Blue shading represents the 50%, 80%, and 95% credible intervals. Red points are the observed data. Note that y-axes vary by patch."}
+results_path <- here('results',"v0.39")
+
+density_hat_thin <- read_rds(here(results_path, "density_hat_thin.rds")) %>%  
+  mutate(year = year + min(years) - 1,
+         patch = patch + min(patches) - 1) 
+
+plot_out <- density_hat_thin %>% 
+  ggplot(aes(year, density_hat)) + 
+  stat_lineribbon() +
+  geom_point(data = dat_train_dens %>% mutate(year = year + min(years) - 1, patch = lat_floor), aes(year, mean_dens), color = "red") +
+  facet_wrap(~patch, scales = "free_y") +
+  labs(x="Year",y="Density", title = ctrl_file |> filter(id == "v0.39" ) |> pull(name)) + 
+  scale_fill_brewer() +
+  theme(legend.title = element_blank(),
+        axis.text.x = element_text(angle = 45, vjust=0.8))
+print(plot_out)
+```
+
+```{r posterior-plot, fig.cap="Posterior distributions of three important parameters from the four fitted DRMs. These parameters are *d*, the annual dispersal rate between adjacent patches; *Topt*, the optimal temperature estimated for whichever process (movement or recruitment or mortality) was estimated as temperature-dependent; and *width*, a parameter controlling how sensitive the modeled process was to temperature."}
+fixed_param_dat <- NULL
+
+for(i in ctrl_file$id){
+  results_path <- here('results',i)
+  out <- read_rds(file.path(here("results"),i,"fixed_params_averaged.rds"))
+  out$name <- ctrl_file[ctrl_file$id==i,]$name
+  fixed_param_dat <- rbind(fixed_param_dat, out)
+}
+
+fixed_param_dat %>% 
+  ggplot(aes(x=value, y=name)) +
+  geom_density_ridges() + 
   facet_wrap(~param, ncol=3, scales="free") +
   labs(x=element_blank(), y="Model") +
   theme_bw() 
+
 # observed_abund_posterior_predictive <- tidybayes::spread_draws(tmp_model, density_obs_proj[patch,year])
 # centroid_proj <- tidybayes::spread_draws(tmp_model, centroid_proj[year]) 
 # range_quantiles_proj <- tidybayes::spread_draws(tmp_model, range_quantiles_proj[quantile, year]) %>%

@@ -61,7 +61,7 @@ functions {
   
   // finally: function to calculate range quantiles
   
-  real calculate_range_quantile(int np, vector patches,
+  real calculate_range_quantile(int np, //vector patches,
   array[] real dens_by_patch, real quantile_out) {
     vector[np] csum_dens;
     vector[np] csum_to_edge;
@@ -753,7 +753,7 @@ transformed parameters {
       
       for (q in 1 : number_quantiles) {
         // calculate every range quantile q for every year y
-        range_quantiles[q, y] = calculate_range_quantile(np, patches,
+        range_quantiles[q, y] = calculate_range_quantile(np, 
         density_hat[ : , y],
         quantiles_calc[q]);
       }
@@ -989,7 +989,7 @@ generated quantities {
       
       for (q in 1 : number_quantiles) {
         // calculate every range quantile q for every year y
-        range_quantiles_proj[q, y] = calculate_range_quantile(np, patches,
+        range_quantiles_proj[q, y] = calculate_range_quantile(np, 
         density_obs_proj[ : , y],
         quantiles_calc[q]);
       }
